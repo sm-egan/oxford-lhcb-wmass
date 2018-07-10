@@ -29,14 +29,23 @@
 
 using namespace std;
 
+TH1F* BWweight (TTree* EventTree, TBranch* ReweightBranch, TBranch* HistBranch, int hist_dims[3], Double_t nominal_mean, Double_t reweight_mean, Double_t gamma) {
+  //use NominalHist->GetXAxis()->GetXMin() to find limits of the histogram
+  
+  TH1F *hweighted = new TH1F("", "", hist_dims[0], hist_dims[1], hist_dims[2]);
+  EventTree->Draw("HistBranch>>hweighted",
+		  "(HistBranch > hist_dims[1] && HistBranch < hist_dims[2])*(TMath::BreitWigner(ReweightBranch, reweight_mean, gamma)/TMath::BreitWigner(TBranch, nominal_mean, gamma))");
+  return hweighted;
+}
 
 void create_templates(){
 
   TH1::SetDefaultSumw2();
 
   //define histograms
-  TH1F *h_muPT= new TH1F("h_mu_PT","#mu P_{T}",40,30,50);
-  
+  int hist_dims[3] = {40,30,50};
+  TH1F *h_muPT= new TH1F("h_mu_PT","#mu P_{T}",hist_dims[0], hist_dims[1], hist_dims[2]);
+ 
   //create output file
   TString name= "/home/egan/oxford-lhcb-wmass/rootfiles/create_templates.root";  	
   TFile *output = new TFile(name,"RECREATE");
