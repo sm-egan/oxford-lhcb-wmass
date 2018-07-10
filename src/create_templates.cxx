@@ -29,11 +29,10 @@
 
 using namespace std;
 
-TH1F* BWweight (TTree* EventTree, TBranch* ReweightBranch, TBranch* HistBranch, int hist_dims[3], Double_t nominal_mean, Double_t reweight_mean, Double_t gamma) {
-  //use NominalHist->GetXAxis()->GetXMin() to find limits of the histogram
-  
-  TH1F *hweighted = new TH1F("", "", hist_dims[0], hist_dims[1], hist_dims[2]);
-  EventTree->Draw("HistBranch>>hweighted",
+TH1F* BWweight (TChain* EventChain, TBranch* ReweightBranch, TBranch* HistBranch, int hist_dims[3], Double_t nominal_mean, Double_t reweight_mean, Double_t gamma) {
+  //Problem, the EventTree object passed is a TTree and not a TChain, this function may therefore inflexible for adding information over many trees
+  TH1F *hweighted = new TH1F("Reweight"+toString(reweight_mean)+"Nominal"+toString(nominal_mean), HistBranch->GetAddress(), hist_dims[0], hist_dims[1], hist_dims[2]);
+  EventChain->Draw("HistBranch>>hweighted",
 		  "(HistBranch > hist_dims[1] && HistBranch < hist_dims[2])*(TMath::BreitWigner(ReweightBranch, reweight_mean, gamma)/TMath::BreitWigner(TBranch, nominal_mean, gamma))");
   return hweighted;
 }
@@ -108,14 +107,15 @@ void create_templates(){
    Double_t Mnom = 80.3819;
    
    Long64_t nbytes = 0;
-   for (Long64_t i=0; i<1000;i++) { //i usually nentries for full data set
+   for (Long64_t i=0; i<(nentries/10);i++) { //i usually nentries for full data set
 
-      nbytes += MCDecayTree->GetEntry(i);
+    nbytes += MCDecayTree->GetEntry(i);
     
-      if(mu_PT > 30 && mu_PT < 50){ // apply a cut
-	h_muPT->Fill(mu_PT);} // add data from each n-tuple to the same histogram
+    if(mu_PT > 30 && mu_PT < 50){ // apply a cut
+      h_muPT->Fill(mu_PT);} // add data from each n-tuple to the same histogram
 	// h_muPT->Fill(mu_PT,weight); if you want to give a weight to the histogram 
- }
+  }
+
 
    TCanvas *c0 = new TCanvas("c0","c0");
    c0->cd();
@@ -126,7 +126,7 @@ void create_templates(){
   c0->Close();   
   output->Close();
    
-   }
+}
 
 int main(){
   create_templates();
