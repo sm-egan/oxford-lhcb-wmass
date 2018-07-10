@@ -29,11 +29,16 @@
 
 using namespace std;
 
-TH1F* BWweight (TChain* EventChain, TBranch* ReweightBranch, TBranch* HistBranch, int hist_dims[3], Double_t nominal_mean, Double_t reweight_mean, Double_t gamma) {
+TH1F* BWweight (TChain* EventChain, string ReweightBranch, string HistBranch, int hist_dims[3], Double_t nominal_mean, Double_t reweight_mean, Double_t gamma) {
   //Problem, the EventTree object passed is a TTree and not a TChain, this function may therefore inflexible for adding information over many trees
-  TH1F *hweighted = new TH1F("Reweight"+toString(reweight_mean)+"Nominal"+toString(nominal_mean), HistBranch->GetAddress(), hist_dims[0], hist_dims[1], hist_dims[2]);
-  EventChain->Draw("HistBranch>>hweighted",
-		  "(HistBranch > hist_dims[1] && HistBranch < hist_dims[2])*(TMath::BreitWigner(ReweightBranch, reweight_mean, gamma)/TMath::BreitWigner(TBranch, nominal_mean, gamma))");
+  string s = "Reweight"+to_string(reweight_mean)+"Nominal"+to_string(nominal_mean);
+  //int n = s.length();
+  //char char_array[n+1];
+  //strcpy(char_array, s.c_str());
+
+  TH1F *hweighted = new TH1F(s.c_str(), HistBranch.c_str(), hist_dims[0], hist_dims[1], hist_dims[2]);
+  EventChain->Draw("EventChain->GetBranch(HistBranch)>>hweighted",
+		   "(HistBranch > hist_dims[1] && HistBranch < hist_dims[2])*(TMath::BreitWigner(ReweightBranch, reweight_mean, gamma)/TMath::BreitWigner(TBranch, nominal_mean, gamma))"); //It's probably the math expressions here with HistBranch which cause it to fail
   return hweighted;
 }
 
@@ -54,7 +59,7 @@ void create_templates(){
   TChain *MCDecayTree = new TChain("MCDecayTree");
   char filename[200];
 
-  for(int k=1;k<2;k++){
+  for(int k=1;k<3;k++){
     sprintf(filename,"/data/lhcb/users/pili/forShannon/13000__Wp__PowhegPythia__as0.138_IKT1.0__evts0__seed000%i.root",k);
       cout <<"filename is  " << filename << endl;
       MCDecayTree->Add(filename);}
@@ -121,7 +126,8 @@ void create_templates(){
    c0->cd();
    
      h_muPT->Draw();
-     output->WriteTObject(h_muPT,h_muPT->GetName(),"Overwrite"); 
+     output->WriteTObject(h_muPT,h_muPT->GetName(),"Overwrite");
+     BWweight(MCDecayTree, "prop_M", "mu_PT", hist_dims, 80.4, 80.6, gamma);
 
   c0->Close();   
   output->Close();
