@@ -23,7 +23,7 @@
 #include "TTreeFormula.h"
 #include "TSystem.h"
 #include "TH2F.h"
-
+#include <vector>
 
 
 
@@ -42,7 +42,9 @@ TH1F* BWweight (TChain* EventChain, string ReweightBranch, string HistBranch, in
   sprintf(selection, "%s > %u && %s < %u", HistBranch.c_str(), hist_dims[1], HistBranch.c_str(), hist_dims[2]);
   char weightexp[300];
   sprintf(weightexp, "(%s)*(TMath::BreitWigner(%s, %f, %f)/TMath::BreitWigner(%s,%f,%f))", 
-	  selection,ReweightBranch.c_str(),reweight_mean,gamma,ReweightBranch.c_str(),reweight_mean,gamma);
+	  selection,ReweightBranch.c_str(),reweight_mean,gamma,ReweightBranch.c_str(),nominal_mean,gamma);
+  //sprintf(weightexp, "(%s)*(2/%f)", 
+  //selection, reweight_mean);
 
   EventChain->Draw(varexp,weightexp); 
   //  EventChain->Draw("EventChain->GetBranch(HistBranch.c_str())>>hweighted",
@@ -61,7 +63,7 @@ void create_templates(){
   TH1F *h_muPT= new TH1F("h_mu_PT","#mu P_{T}",hist_dims[0], hist_dims[1], hist_dims[2]);
  
   //create output file
-  TString name= "/home/egan/oxford-lhcb-wmass/rootfiles/create_templates.root";  	
+  TString name= "~/oxford-lhcb-wmass/rootfiles/create_templates.root";  	
   TFile *output = new TFile(name,"RECREATE");
  
   // load root files 
@@ -122,7 +124,7 @@ void create_templates(){
    Double_t Mnom = 80.3819;
    
    Long64_t nbytes = 0;
-   for (Long64_t i=0; i<(nentries/10);i++) { //usually i< nentries for full data set
+   for (Long64_t i=0; i<(1000);i++) { //usually i< nentries for full data set
 
     nbytes += MCDecayTree->GetEntry(i);
     
@@ -135,11 +137,37 @@ void create_templates(){
    //TCanvas *c0 = new TCanvas("c0","c0");
    //c0->cd();
    
-     h_muPT->Draw();
-     output->WriteTObject(h_muPT,h_muPT->GetName(),"Overwrite");
-     
-     TH1F* h_BW = BWweight(MCDecayTree, "prop_M", "mu_PT", hist_dims, 80.4, 80.6, gamma);
-     output->WriteTObject(h_BW,h_BW->GetName(),"Overwrite");
+    h_muPT->Draw();
+    output->WriteTObject(h_muPT,h_muPT->GetName(),"Overwrite");
+
+    int nhists = 5;
+    string hBWname;
+    vector<TH1F *> hBW_vect;
+
+    for (Double_t j=79.8; j<=80.8; j+=(80.8-79.8)/(nhists-1)) {
+      //
+      hBW_vect.push_back(BWweight(MCDecayTree, "prop_M", "mu_PT", hist_dims, Mnom, j, gamma));
+      //output->WriteTObject(h_BW,h_BW->GetName(),"Overwrite");
+    }
+
+    bool firsthist = true;
+    int colourit = 1;
+    //int lineit = 1;
+    
+    TCanvas* c = new TCanvas("cBW", "mu PT with different W mass hypotheses");
+      
+    for (vector<TH1F *>::iterator histit = hBW_vect.begin(); histit != hBW_vect.end(); histit++, colourit++) {
+      //brackets around *histit ensure that we are acting on the pointer to the TH1F, not the iterative pointer to the pointer  
+      output->WriteTObject(*histit, (*histit)->GetName(),"Overwrite");
+      (*histit)->SetLineColor(colourit);
+
+      if(firsthist) {
+	(*histit)->Draw();
+	firsthist = false;
+      } else (*histit)->Draw("SAME");
+    }
+    c->Print("~/oxford-lhcb-wmass/plots/WmasshypHist.png");
+    c->Close();
 
      //c0->Close();   
      //output->Close();
