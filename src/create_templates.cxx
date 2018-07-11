@@ -29,13 +29,17 @@
 
 using namespace std;
 
-TH1F* BWweight (TChain* EventChain, string ReweightBranch, string HistBranch, int hist_dims[3], Double_t nominal_mean, Double_t reweight_mean, Double_t gamma) {
+struct TemplateStruct {vector<Double_t> Wmasses; vector<TH1F *> templates; vector<TH1F *> toys;};
+
+TH1F* BWweight (TChain* EventChain, string ReweightBranch, string HistBranch, int hist_dims[3], Double_t nominal_mean, Double_t reweight_mean) {
   //Set the title of the histogram to include the Wmass hypothesis
   string s = "Reweight"+to_string(reweight_mean)+"Nominal"+to_string(nominal_mean);
+  Double_t gamma = 2.15553;
+  //Long64_t nentries = EventChain->GetEntries();
 
   TH1F *hweighted = new TH1F(s.c_str(), HistBranch.c_str(), hist_dims[0], hist_dims[1], hist_dims[2]);
   
-  //Create a 
+  //Create strings of characters to send to the draw expression which integrate the passed parameters
   char varexp[100];
   sprintf(varexp, "%s >> %s", HistBranch.c_str(), s.c_str());
   char selection[300];
@@ -43,25 +47,18 @@ TH1F* BWweight (TChain* EventChain, string ReweightBranch, string HistBranch, in
   char weightexp[300];
   sprintf(weightexp, "(%s)*(TMath::BreitWigner(%s, %f, %f)/TMath::BreitWigner(%s,%f,%f))", 
 	  selection,ReweightBranch.c_str(),reweight_mean,gamma,ReweightBranch.c_str(),nominal_mean,gamma);
-  //sprintf(weightexp, "(%s)*(2/%f)", 
-  //selection, reweight_mean);
 
-  EventChain->Draw(varexp,weightexp); 
-  //  EventChain->Draw("EventChain->GetBranch(HistBranch.c_str())>>hweighted",
-  //EventChain->Draw(varexp,"(selection)*(TMath::BreitWigner(ReweightBranch, reweight_mean, gamma)/TMath::BreitWigner(ReweightBranch, nominal_mean, gamma))"); 
-		   //"(HistBranch > hist_dims[1] && HistBranch < hist_dims[2])*(TMath::BreitWigner(ReweightBranch, reweight_mean, gamma)/TMath::BreitWigner(TBranch, nominal_mean, gamma))"); //It's probably the math expressions here with HistBranch which cause it to fail
-		   
+  EventChain->Draw(varexp,weightexp); 		   
   return hweighted;
 }
 
-void create_templates(){
+TemplateStruct create_templates(int hist_dims[3], int ntemplates=1, int ndata_files=1, int split_ratio=2) {
 
   TH1::SetDefaultSumw2();
 
-  //define histograms
-  int hist_dims[3] = {40,30,50};
+  //define histogram
   TH1F *h_muPT= new TH1F("h_mu_PT","#mu P_{T}",hist_dims[0], hist_dims[1], hist_dims[2]);
- 
+
   //create output file
   TString name= "~/oxford-lhcb-wmass/rootfiles/create_templates.root";  	
   TFile *output = new TFile(name,"RECREATE");
@@ -71,10 +68,13 @@ void create_templates(){
   TChain *MCDecayTree = new TChain("MCDecayTree");
   char filename[200];
 
-  for(int k=1;k<3;k++){
-    sprintf(filename,"/data/lhcb/users/pili/forShannon/13000__Wp__PowhegPythia__as0.138_IKT1.0__evts0__seed000%i.root",k);
-      cout <<"filename is  " << filename << endl;
-      MCDecayTree->Add(filename);}
+  for(int k=1;k<=ndata_files;k++){
+    if (k<10){
+      sprintf(filename,"/data/lhcb/users/pili/forShannon/13000__Wp__PowhegPythia__as0.138_IKT1.0__evts0__seed000%u.root",k);
+    } else sprintf(filename,"/data/lhcb/users/pili/forShannon/13000__Wp__PowhegPythia__as0.138_IKT1.0__evts0__seed00%u.root",k);
+    cout <<"filename is  " << filename << endl;
+    MCDecayTree->Add(filename);
+  }
   
       /* for(int k=10;k<21;k++){
     sprintf(filename,"/data/lhcb/users/pili/forShannon/13000__Wp__PowhegPythia__as0.138_IKT1.0__evts0__seed00%i.root",k);
@@ -119,12 +119,12 @@ void create_templates(){
    MCDecayTree->SetBranchAddress("x2pdf",&x2pdf);
 
    Long64_t nentries = MCDecayTree->GetEntries();
-   
-   Double_t gamma = 2.15553;
    Double_t Mnom = 80.3819;
-   
+
    Long64_t nbytes = 0;
-   for (Long64_t i=0; i<(1000);i++) { //usually i< nentries for full data set
+   vector<TH1F *> hist_vect;
+
+   for (Long64_t i=0; i<(nentries/split_ratio);i++) { //usually i< nentries for full data set
 
     nbytes += MCDecayTree->GetEntry(i);
     
@@ -132,21 +132,15 @@ void create_templates(){
       h_muPT->Fill(mu_PT);} // add data from each n-tuple to the same histogram
 	// h_muPT->Fill(mu_PT,weight); if you want to give a weight to the histogram 
   }
-
-
-   //TCanvas *c0 = new TCanvas("c0","c0");
-   //c0->cd();
    
     h_muPT->Draw();
     output->WriteTObject(h_muPT,h_muPT->GetName(),"Overwrite");
+    vector<Double_t> Wmass_vect;
 
-    int nhists = 5;
-    string hBWname;
-    vector<TH1F *> hBW_vect;
-
-    for (Double_t j=79.8; j<=80.8; j+=(80.8-79.8)/(nhists-1)) {
+    for (Double_t Mhyp=79.8; Mhyp<=80.8; Mhyp+=(80.8-79.8)/(ntemplates-1)) { //Mhyp for mass hypothesis
       //
-      hBW_vect.push_back(BWweight(MCDecayTree, "prop_M", "mu_PT", hist_dims, Mnom, j, gamma));
+      hist_vect.push_back(BWweight(MCDecayTree, "prop_M", "mu_PT", hist_dims, Mnom, Mhyp));
+      Wmass_vect.push_back(Mhyp);
       //output->WriteTObject(h_BW,h_BW->GetName(),"Overwrite");
     }
 
@@ -156,7 +150,7 @@ void create_templates(){
     
     TCanvas* c = new TCanvas("cBW", "mu PT with different W mass hypotheses");
       
-    for (vector<TH1F *>::iterator histit = hBW_vect.begin(); histit != hBW_vect.end(); histit++, colourit++) {
+    for (vector<TH1F *>::iterator histit = hist_vect.begin(); histit != hist_vect.end(); histit++, colourit++) {
       //brackets around *histit ensure that we are acting on the pointer to the TH1F, not the iterative pointer to the pointer  
       output->WriteTObject(*histit, (*histit)->GetName(),"Overwrite");
       (*histit)->SetLineColor(colourit);
@@ -167,13 +161,34 @@ void create_templates(){
       } else (*histit)->Draw("SAME");
     }
     c->Print("~/oxford-lhcb-wmass/plots/WmasshypHist.png");
+    c->Print("~/oxford-lhcb-wmass/plots/WmasshypHist.pdf");
     c->Close();
+    
+    TemplateStruct ts;
+    ts.Wmasses = Wmass_vect;
+    ts.templates = hist_vect;
+    ts.toys.push_back(h_muPT);
+    return ts; 
+}
 
-     //c0->Close();   
-     //output->Close();
-   
+void template_chi2 (TemplateStruct ts) {
+  /*
+  for (vector<TH1F *>::iterator histit = hist_vect.begin(); histit != hist_vect.end(); histit++) {
+    (*histit)->Scale(1 / ((*histit)->Integral()));
+  }
+  
+  TH1F *toyhist = *(hist_vect.end());
+  hist_vect.pop_back();
+
+  //Initialize a Double_t matrix to contain both 
+
+  for (vector<TH1F *>::iterator templateit = hist_vect.begin(); templateit != hist_vector.end(); templateit++) {
+    (*templateit)->Chi2Test(toyhist, "WW"); 
+  }
+  */
 }
 
 int main(){
-  create_templates();
+  int hist_dims[3] = {40,30,50};
+  TemplateStruct ts = create_templates(hist_dims, 5, 2);
 }
