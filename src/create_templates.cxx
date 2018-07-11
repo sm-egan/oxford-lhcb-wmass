@@ -30,15 +30,25 @@
 using namespace std;
 
 TH1F* BWweight (TChain* EventChain, string ReweightBranch, string HistBranch, int hist_dims[3], Double_t nominal_mean, Double_t reweight_mean, Double_t gamma) {
-  //Problem, the EventTree object passed is a TTree and not a TChain, this function may therefore inflexible for adding information over many trees
+  //Set the title of the histogram to include the Wmass hypothesis
   string s = "Reweight"+to_string(reweight_mean)+"Nominal"+to_string(nominal_mean);
-  //int n = s.length();
-  //char char_array[n+1];
-  //strcpy(char_array, s.c_str());
 
   TH1F *hweighted = new TH1F(s.c_str(), HistBranch.c_str(), hist_dims[0], hist_dims[1], hist_dims[2]);
-  EventChain->Draw("EventChain->GetBranch(HistBranch)>>hweighted",
-		   "(HistBranch > hist_dims[1] && HistBranch < hist_dims[2])*(TMath::BreitWigner(ReweightBranch, reweight_mean, gamma)/TMath::BreitWigner(TBranch, nominal_mean, gamma))"); //It's probably the math expressions here with HistBranch which cause it to fail
+  
+  //Create a 
+  char varexp[100];
+  sprintf(varexp, "%s >> hweighted", HistBranch.c_str());
+  char selection[300];
+  sprintf(selection, "%s > %u && %s < %u", HistBranch.c_str(), hist_dims[1], HistBranch.c_str(), hist_dims[2]);
+  char weightexp[300];
+  sprintf(weightexp, "(%s)*(TMath::BreitWigner(%s, %f, %f)/TMath::BreitWigner(%s,%f,%f))", 
+	  selection,ReweightBranch.c_str(),reweight_mean,gamma,ReweightBranch.c_str(),reweight_mean,gamma);
+
+  EventChain->Draw(varexp,weightexp); 
+  //  EventChain->Draw("EventChain->GetBranch(HistBranch.c_str())>>hweighted",
+  //EventChain->Draw(varexp,"(selection)*(TMath::BreitWigner(ReweightBranch, reweight_mean, gamma)/TMath::BreitWigner(ReweightBranch, nominal_mean, gamma))"); 
+		   //"(HistBranch > hist_dims[1] && HistBranch < hist_dims[2])*(TMath::BreitWigner(ReweightBranch, reweight_mean, gamma)/TMath::BreitWigner(TBranch, nominal_mean, gamma))"); //It's probably the math expressions here with HistBranch which cause it to fail
+		   
   return hweighted;
 }
 
@@ -122,15 +132,17 @@ void create_templates(){
   }
 
 
-   TCanvas *c0 = new TCanvas("c0","c0");
-   c0->cd();
+   //TCanvas *c0 = new TCanvas("c0","c0");
+   //c0->cd();
    
      h_muPT->Draw();
      output->WriteTObject(h_muPT,h_muPT->GetName(),"Overwrite");
-     BWweight(MCDecayTree, "prop_M", "mu_PT", hist_dims, 80.4, 80.6, gamma);
+     
+     TH1F* h_BW = BWweight(MCDecayTree, "prop_M", "mu_PT", hist_dims, 80.4, 80.6, gamma);
+     output->WriteTObject(h_BW,h_BW->GetName(),"Overwrite");
 
-  c0->Close();   
-  output->Close();
+     //c0->Close();   
+     //output->Close();
    
 }
 
