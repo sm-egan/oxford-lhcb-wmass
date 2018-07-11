@@ -37,7 +37,7 @@ TH1F* BWweight (TChain* EventChain, string ReweightBranch, string HistBranch, in
   
   //Create a 
   char varexp[100];
-  sprintf(varexp, "%s >> hweighted", HistBranch.c_str());
+  sprintf(varexp, "%s >> %s", HistBranch.c_str(), s.c_str());
   char selection[300];
   sprintf(selection, "%s > %u && %s < %u", HistBranch.c_str(), hist_dims[1], HistBranch.c_str(), hist_dims[2]);
   char weightexp[300];
@@ -122,7 +122,7 @@ void create_templates(){
    Double_t Mnom = 80.3819;
    
    Long64_t nbytes = 0;
-   for (Long64_t i=0; i<(nentries/10);i++) { //i usually nentries for full data set
+   for (Long64_t i=0; i<(nentries/10);i++) { //usually i< nentries for full data set
 
     nbytes += MCDecayTree->GetEntry(i);
     
