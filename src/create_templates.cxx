@@ -58,7 +58,7 @@ TH1F* DrawH_BW (TChain* EventChain, string ReweightBranch, string HistBranch, in
   return hweighted;
 }
 
-TemplateStruct * create_templates(int hist_dims[3], int ntemplates=1, int ndata_files=1, int split_ratio=2) {
+TemplateStruct create_templates(int hist_dims[3], int ntemplates=5, int ndata_files=2, int split_ratio=2) {
 
   TH1::SetDefaultSumw2();
 
@@ -169,7 +169,7 @@ TemplateStruct * create_templates(int hist_dims[3], int ntemplates=1, int ndata_
     c->Print("~/oxford-lhcb-wmass/plots/WmasshypHist.pdf");
     c->Close();
     
-    static TemplateStruct ts;
+    TemplateStruct ts;
     ts.Wmasses = Wmass_vect;
     ts.templates = hist_vect;
     ts.toys.push_back(h_muPT);
@@ -178,9 +178,9 @@ TemplateStruct * create_templates(int hist_dims[3], int ntemplates=1, int ndata_
 
 void template_chi2 (TemplateStruct *ts, TString output_name = "~/oxford-lhcb-wmass/rootfiles/create_templates.root") {
 
-  TFile *output = TFile::Open(output_name, "UPDATE");
-  vector<TH1F *> template_vect = ts.templates;
-  vector<TH1F *> toy_vect = ts.toys;
+  //TFile *output = TFile::Open(output_name, "UPDATE");
+  vector<TH1F *> template_vect = ts->templates;
+  vector<TH1F *> toy_vect = ts->toys;
 
   /* To Do List
       - construct one 2D array/vector containing the chi-square results corresponding to each toy i.e. array[toyindex][templateindex]
