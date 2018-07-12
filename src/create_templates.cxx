@@ -24,13 +24,14 @@
 #include "TSystem.h"
 #include "TH2F.h"
 #include <vector>
-
+#include "TemplateStruct.h"
 
 
 using namespace std;
 
-struct TemplateStruct {vector<Double_t> Wmasses; vector<TH1F *> templates; vector<TH1F *> toys;};
+//struct TemplateStruct {vector<Double_t> Wmasses; vector<TH1F *> templates; vector<TH1F *> toys;};
 
+/*
 string truncate_decimal(double x, double precision) {
   stringstream stream;
   stream << fixed << setprecision(precision) << x;
@@ -81,12 +82,6 @@ TemplateStruct create_templates(int hist_dims[3], int ntemplates=5, int ndata_fi
     cout <<"filename is  " << filename << endl;
     MCDecayTree->Add(filename);
   }
-  
-      /* for(int k=10;k<21;k++){
-    sprintf(filename,"/data/lhcb/users/pili/forShannon/13000__Wp__PowhegPythia__as0.138_IKT1.0__evts0__seed00%i.root",k);
-    cout <<"filename is " << filename << endl;
-    MCDecayTree->Add(filename);
-    }*/
 
 //Declaration of leaves types
    Float_t         prop_M;
@@ -141,7 +136,7 @@ TemplateStruct create_templates(int hist_dims[3], int ntemplates=5, int ndata_fi
    
     h_muPT->Draw();
     output->WriteTObject(h_muPT,h_muPT->GetName(),"Overwrite");
-    vector<Double_t> Wmass_vect;
+    //vector<Double_t> Wmass_vect;
 
     for (Double_t Mhyp=79.8; Mhyp<=80.8; Mhyp+=(80.8-79.8)/(ntemplates-1)) { //Mhyp for mass hypothesis
       hist_vect.push_back(DrawH_BW(MCDecayTree, "prop_M", "mu_PT", hist_dims, Mnom, Mhyp));
@@ -174,7 +169,7 @@ TemplateStruct create_templates(int hist_dims[3], int ntemplates=5, int ndata_fi
     ts.templates = hist_vect;
     ts.toys.push_back(h_muPT);
     return ts; 
-}
+} 
 
 void template_chi2 (TemplateStruct *ts, TString output_name = "~/oxford-lhcb-wmass/rootfiles/create_templates.root") {
 
@@ -182,16 +177,16 @@ void template_chi2 (TemplateStruct *ts, TString output_name = "~/oxford-lhcb-wma
   vector<TH1F *> template_vect = ts->templates;
   vector<TH1F *> toy_vect = ts->toys;
 
-  /* To Do List
+   To Do List
       - construct one 2D array/vector containing the chi-square results corresponding to each toy i.e. array[toyindex][templateindex]
           - where template index corresponds to a W mass hypothesis at the same index
       - 1D array of W masses 
       - Vector of TGraph pointers corresponding to each toy model
           - each TGraph having been written to a root file 
-  */
+  
 
 
-  /*
+  
   for (vector<TH1F *>::iterator histit = hist_vect.begin(); histit != hist_vect.end(); histit++) {
     (*histit)->Scale(1 / ((*histit)->Integral()));
   }
@@ -204,10 +199,13 @@ void template_chi2 (TemplateStruct *ts, TString output_name = "~/oxford-lhcb-wma
   for (vector<TH1F *>::iterator templateit = hist_vect.begin(); templateit != hist_vector.end(); templateit++) {
     (*templateit)->Chi2Test(toyhist, "WW"); 
   }
-  */
-}
+  
+} 
+*/
 
 int main(){
   int hist_dims[3] = {40,30,50};
-  TemplateStruct ts = create_templates(hist_dims, 5, 2);
+  TemplateStruct *ts;
+
+  ts->create_templates(hist_dims, 5, 2);
 }

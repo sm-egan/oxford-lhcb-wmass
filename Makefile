@@ -15,6 +15,9 @@ bin/%.exe: src/%.cxx
 	@mkdir -p bin/
 	$(CC) $^ -o $@ -ldl -I./include/ $(ROOT) $(LHAPDF) $(CFLAGS)
 
+src/%.cxx: src/%.h 
+	$(CC) $^ -o $@ -ldl -I./include/ $(ROOT) $(LHAPDF) $(CFLAGS)
+
 clean:
 	rm -f bin/*.exe    
 
