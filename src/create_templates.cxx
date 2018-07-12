@@ -31,9 +31,15 @@ using namespace std;
 
 struct TemplateStruct {vector<Double_t> Wmasses; vector<TH1F *> templates; vector<TH1F *> toys;};
 
-TH1F* BWweight (TChain* EventChain, string ReweightBranch, string HistBranch, int hist_dims[3], Double_t nominal_mean, Double_t reweight_mean) {
+string truncate_decimal(double x, double precision) {
+  stringstream stream;
+  stream << fixed << setprecision(precision) << x;
+  return stream.str(); 
+}
+
+TH1F* DrawH_BW (TChain* EventChain, string ReweightBranch, string HistBranch, int hist_dims[3], Double_t nominal_mean, Double_t reweight_mean) {
   //Set the title of the histogram to include the Wmass hypothesis
-  string s = "Reweight"+to_string(reweight_mean)+"Nominal"+to_string(nominal_mean);
+  string s = "Reweight"+truncate_decimal(reweight_mean,2)+"Nominal"+truncate_decimal(reweight_mean,2);
   Double_t gamma = 2.15553;
   //Long64_t nentries = EventChain->GetEntries();
 
@@ -52,7 +58,7 @@ TH1F* BWweight (TChain* EventChain, string ReweightBranch, string HistBranch, in
   return hweighted;
 }
 
-TemplateStruct create_templates(int hist_dims[3], int ntemplates=1, int ndata_files=1, int split_ratio=2) {
+TemplateStruct * create_templates(int hist_dims[3], int ntemplates=1, int ndata_files=1, int split_ratio=2) {
 
   TH1::SetDefaultSumw2();
 
@@ -138,8 +144,7 @@ TemplateStruct create_templates(int hist_dims[3], int ntemplates=1, int ndata_fi
     vector<Double_t> Wmass_vect;
 
     for (Double_t Mhyp=79.8; Mhyp<=80.8; Mhyp+=(80.8-79.8)/(ntemplates-1)) { //Mhyp for mass hypothesis
-      //
-      hist_vect.push_back(BWweight(MCDecayTree, "prop_M", "mu_PT", hist_dims, Mnom, Mhyp));
+      hist_vect.push_back(DrawH_BW(MCDecayTree, "prop_M", "mu_PT", hist_dims, Mnom, Mhyp));
       Wmass_vect.push_back(Mhyp);
       //output->WriteTObject(h_BW,h_BW->GetName(),"Overwrite");
     }
@@ -164,14 +169,28 @@ TemplateStruct create_templates(int hist_dims[3], int ntemplates=1, int ndata_fi
     c->Print("~/oxford-lhcb-wmass/plots/WmasshypHist.pdf");
     c->Close();
     
-    TemplateStruct ts;
+    static TemplateStruct ts;
     ts.Wmasses = Wmass_vect;
     ts.templates = hist_vect;
     ts.toys.push_back(h_muPT);
     return ts; 
 }
 
-void template_chi2 (TemplateStruct ts) {
+void template_chi2 (TemplateStruct *ts, TString output_name = "~/oxford-lhcb-wmass/rootfiles/create_templates.root") {
+
+  TFile *output = TFile::Open(output_name, "UPDATE");
+  vector<TH1F *> template_vect = ts.templates;
+  vector<TH1F *> toy_vect = ts.toys;
+
+  /* To Do List
+      - construct one 2D array/vector containing the chi-square results corresponding to each toy i.e. array[toyindex][templateindex]
+          - where template index corresponds to a W mass hypothesis at the same index
+      - 1D array of W masses 
+      - Vector of TGraph pointers corresponding to each toy model
+          - each TGraph having been written to a root file 
+  */
+
+
   /*
   for (vector<TH1F *>::iterator histit = hist_vect.begin(); histit != hist_vect.end(); histit++) {
     (*histit)->Scale(1 / ((*histit)->Integral()));
