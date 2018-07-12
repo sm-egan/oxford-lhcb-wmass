@@ -41,14 +41,14 @@ class TemplateStruct {
 		Double_t split_ratio;
 		TString output_name;
 
-		TemplateStruct::TemplateStruct();
-		TemplateStruct::TemplateStruct(Double_t split, TString root_file);
+	        TemplateStruct();
+		TemplateStruct(Double_t split, TString root_file);
 		
-		void TemplateStruct::create_templates(int hist_dims[3], int ntemplates=5, int ndata_files=2);
+		void create_templates(int hist_dims[3], int ntemplates=5, int ndata_files=2);
 
 	protected:
-		void TemplateStruct::drawH_BW (TChain* EventChain, string ReweightBranch, string HistBranch, 
-										int hist_dims[3], Double_t nominal_mean, Double_t reweight_mean);
+		void drawH_BW (TChain* EventChain, string ReweightBranch, string HistBranch, 
+			       int hist_dims[3], Double_t nominal_mean, Double_t reweight_mean);
 
 };
 

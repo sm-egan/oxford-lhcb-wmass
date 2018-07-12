@@ -205,7 +205,7 @@ void template_chi2 (TemplateStruct *ts, TString output_name = "~/oxford-lhcb-wma
 
 int main(){
   int hist_dims[3] = {40,30,50};
-  TemplateStruct *ts;
+  TemplateStruct *ts = new TemplateStruct();
 
   ts->create_templates(hist_dims, 5, 2);
 }

@@ -1,4 +1,5 @@
 ROOT=`root-config --cflags` `root-config --libs --glibs` 
+#This is the original makefile for when everything was executed from create_templates.cxx
 
 #LHAPDF_DIR=/home/pili/local
 
@@ -13,9 +14,6 @@ all: bin/create_templates.exe
 bin/%.exe: src/%.cxx
 	@mkdir -p tmp/
 	@mkdir -p bin/
-	$(CC) $^ -o $@ -ldl -I./include/ $(ROOT) $(LHAPDF) $(CFLAGS)
-
-src/%.cxx: src/%.h 
 	$(CC) $^ -o $@ -ldl -I./include/ $(ROOT) $(LHAPDF) $(CFLAGS)
 
 clean:
