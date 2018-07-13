@@ -26,6 +26,8 @@
 #include "TTreeFormula.h"
 #include "TSystem.h"
 #include "TH2F.h"
+#include "TGraph.h"
+#include "TVectorD.h"
 #include <vector>
 
 
@@ -34,21 +36,22 @@ using namespace std;
 
 class TemplateStruct {
 
-	public: 
-		vector<Double_t> Wmasses; 
-		vector<TH1F *> templates; 
-		vector<TH1F *> toys;
-		Double_t split_ratio;
-		TString output_name;
-
-	        TemplateStruct();
-		TemplateStruct(Double_t split, TString root_file);
-		
-		void create_templates(int hist_dims[3], int ntemplates=5, int ndata_files=2);
-
-	protected:
-		void drawH_BW (TChain* EventChain, string ReweightBranch, string HistBranch, 
-			       int hist_dims[3], Double_t nominal_mean, Double_t reweight_mean);
+ public:
+  vector<Double_t> Wmasses; 
+  vector<TH1F *> templates; 
+  vector<TH1F *> toys;
+  
+  Double_t split_ratio;
+  TString output_name;
+  
+  TemplateStruct();
+  TemplateStruct(Double_t split, TString root_file);	
+  void create_templates(int hist_dims[3], int ntemplates, int ndata_files);
+  void template_chi2();
+ 
+  protected:
+    void drawH_BW (TChain* EventChain, string ReweightBranch, string HistBranch, 
+		   int hist_dims[3], Double_t nominal_mean, Double_t reweight_mean);
 
 };
 

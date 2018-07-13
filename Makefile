@@ -9,12 +9,15 @@ CFLAGS = -O3  -Wall -std=c++1y -pedantic -Wshadow
 #CC=g++
 CC=$(CXX)
 
-all: bin/create_templates.exe
+all: bin/TemplateStruct.o bin/create_templates.exe
 
-bin/%.exe: src/%.cxx
+bin/create_templates.exe: src/%.cxx, src/%.h
 	@mkdir -p tmp/
 	@mkdir -p bin/
 	$(CC) $^ -o $@ -ldl -I./include/ $(ROOT) $(LHAPDF) $(CFLAGS)
+
+bin/%.o: src/%.cxx src/%.h
+	$(CC) $< -o $@ $(ROOT) $(LHAPDF) $(CFLAGS)
 
 clean:
 	rm -f bin/*.exe    
