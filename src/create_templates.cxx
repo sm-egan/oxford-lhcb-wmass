@@ -208,5 +208,5 @@ int main(){
   TemplateStruct *ts = new TemplateStruct();
 
   ts->create_templates(hist_dims, 5, 2);
-  ts->template_chi2();
+  //ts->template_chi2();
 }

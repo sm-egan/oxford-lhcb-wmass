@@ -24,7 +24,6 @@
 #include "TSystem.h"
 #include "TH2F.h"
 #include "TGraph.h"
-#include "TVectorD.h"
 
 #include <vector>
 
@@ -35,7 +34,7 @@ using namespace std;
 
 
 TemplateStruct::TemplateStruct () {
-  this->split_ratio = 2;	
+  this->split_ratio = 0.5;	
   this->output_name = "~/oxford-lhcb-wmass/rootfiles/create_templates.root";
 }
 
@@ -52,9 +51,9 @@ void TemplateStruct::drawH_BW (TChain* EventChain, string ReweightBranch, string
 
   string s = "Reweight"+ sreweight.str() +"Nominal"+ snominal.str();
   Double_t gamma = 2.15553;
-  Long64_t nentries = EventChain->GetEntries();
   Double_t data_split = this->split_ratio;
-  
+  Long64_t maxentries = lrint((EventChain->GetEntries())*data_split);
+
   TH1F *hweighted = new TH1F(s.c_str(), HistBranch.c_str(), hist_dims[0], hist_dims[1], hist_dims[2]);
   
   //Create strings of characters to send to the draw expression which integrate the passed parameters
@@ -67,7 +66,7 @@ void TemplateStruct::drawH_BW (TChain* EventChain, string ReweightBranch, string
 	  selection,ReweightBranch.c_str(),reweight_mean,gamma,ReweightBranch.c_str(),nominal_mean,gamma);
 
   //EventChain->Draw(varexp, weightexp,"", long(nentries/data_split), (long)nentries/data_split); 
-  EventChain->Draw(varexp, weightexp,"", 10000, 10000); 
+  EventChain->Draw(varexp, weightexp,"", maxentries, maxentries); 
   this->templates.push_back(hweighted);
   this->Wmasses.push_back(reweight_mean);
 }
@@ -184,7 +183,7 @@ void TemplateStruct::create_templates(int hist_dims[3], int ntemplates=5, int nd
     // Add the single toy histogram to the TemplateStruct vector.  Eventually this will be modified to create a loop
     this->toys.push_back(h_muPT);
 }
-
+/*
 void TemplateStruct::template_chi2 () {
 
   TFile *output = TFile::Open(this->output_name, "UPDATE");
@@ -194,14 +193,14 @@ void TemplateStruct::template_chi2 () {
   vector<TH1F *>::iterator templateit;
   vector<TH1F *>::iterator toyit;
 
-  /*  To Do List
+    To Do List
       - construct one 2D array/vector containing the chi-square results corresponding to each toy i.e. array[toyindex][templateindex]
           - where template index corresponds to a W mass hypothesis at the same index
       - 1D array of W masses 
       - Vector of TGraph pointers corresponding to each toy model
           - each TGraph having been written to a root file 
   
-  */
+  
   //Unit normalize all of the template histograms
   for (templateit = template_vect.begin(); templateit != template_vect.end(); templateit++) {
     (*templateit)->Scale(1/((*templateit)->Integral()));
@@ -237,14 +236,16 @@ void TemplateStruct::template_chi2 () {
   }
   
   // Next step: Plot TGraphs of the chi square results vs W boson mass - need to figure out how to set the points after initialization
-  /*
+  
   for (int i=0; i < toy_vect.size; i++) {
     chi2Plot->DrawGraph(template_vect.size(), this->Wmasses, chi2_results[i]);
     output->WriteTObject(chi2Plot, "get a unique name" ,"Overwrite");
-    }*/
+    }
       // A potential next step: open TCanvas to write TGraphs of different toys to the same plot
 }
-
+*/
+/*
 int main () {
   return 0;
 }
+*/
