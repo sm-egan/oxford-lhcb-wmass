@@ -54,6 +54,7 @@ void TemplateStruct::drawH_BW (TChain* EventChain, string ReweightBranch, string
   Double_t data_split = this->split_ratio;
   Long64_t maxentries = lrint((EventChain->GetEntries())*data_split);
 
+  TH1::SetDefaultSumw2();
   TH1F *hweighted = new TH1F(s.c_str(), HistBranch.c_str(), hist_dims[0], hist_dims[1], hist_dims[2]);
   
   //Create strings of characters to send to the draw expression which integrate the passed parameters
@@ -65,7 +66,7 @@ void TemplateStruct::drawH_BW (TChain* EventChain, string ReweightBranch, string
   sprintf(weightexp, "(%s)*(TMath::BreitWigner(%s, %f, %f)/TMath::BreitWigner(%s,%f,%f))", 
 	  selection,ReweightBranch.c_str(),reweight_mean,gamma,ReweightBranch.c_str(),nominal_mean,gamma);
 
-  //EventChain->Draw(varexp, weightexp,"", long(nentries/data_split), (long)nentries/data_split); 
+  //  EventChain->Draw(varexp, weightexp,"", 1000); 
   EventChain->Draw(varexp, weightexp,"", maxentries, maxentries); 
   this->templates.push_back(hweighted);
   this->Wmasses.push_back(reweight_mean);
@@ -136,7 +137,7 @@ void TemplateStruct::create_templates(int hist_dims[3], int ntemplates=5, int nd
    // ask Martina what this is for - I don't see it being used
    Long64_t nbytes = 0;
 
-   for (Long64_t i=0; i<(nentries/split_ratio);i++) { //usually i< nentries for full data set
+   for (Long64_t i=0; i<(nentries*split_ratio);i++) { //usually i< nentries*split_ratio for full data set
 
     nbytes += MCDecayTree->GetEntry(i);
     
@@ -152,16 +153,22 @@ void TemplateStruct::create_templates(int hist_dims[3], int ntemplates=5, int nd
 
     for (Double_t Mhyp=79.8; Mhyp<=80.8; Mhyp+=(80.8-79.8)/(ntemplates-1)) { //Mhyp for mass hypothesis
       this->drawH_BW(MCDecayTree, "prop_M", "mu_PT", hist_dims, Mnom, Mhyp);
+      
+      /* The goal of the lines commented out here was to make sure that there would always be n templates, even when the increment of the addition does not divide perfectly into 1
+      if (((Mhyp +(80.8-79.8)/(ntemplates-1)) > 80.8) && (Mhyp != 80.8)) {
+	this->drawH_BW(MCDecayTree, "prop_M", "mu_PT", hist_dims, Mnom, 80.8);
+	}*/
     }
 
     bool firsthist = true;
     int colourit = 1;
+    vector<TH1F *>::iterator templateit;
     // Below might be necessary for larger number of hypotheses
     //int lineit = 1;
     
     TCanvas* c = new TCanvas("cBW", "mu PT with different W mass hypotheses");
       
-    for (vector<TH1F *>::iterator templateit = this->templates.begin(); templateit != this->templates.end(); templateit++, colourit++) {
+    for (templateit = this->templates.begin(); templateit != this->templates.end(); templateit++, colourit++) {
       //brackets around *templateit ensure that we are acting on the pointer to the TH1F, not the iterative pointer to the pointer  
       output->WriteTObject(*templateit, (*templateit)->GetName(),"Overwrite");
       (*templateit)->SetLineColor(colourit);
@@ -182,68 +189,157 @@ void TemplateStruct::create_templates(int hist_dims[3], int ntemplates=5, int nd
 
     // Add the single toy histogram to the TemplateStruct vector.  Eventually this will be modified to create a loop
     this->toys.push_back(h_muPT);
-}
-/*
-void TemplateStruct::template_chi2 () {
+    //output->Close();
 
-  TFile *output = TFile::Open(this->output_name, "UPDATE");
-  vector<TH1F *> template_vect = this->templates;
-  vector<TH1F *> toy_vect = this->toys;
-  vector<Double_t> Wmass_vect = this->Wmasses;
-  vector<TH1F *>::iterator templateit;
-  vector<TH1F *>::iterator toyit;
+    //this->template_chi2();
+    
+    vector<TH1F *>::iterator toyit;
 
-    To Do List
-      - construct one 2D array/vector containing the chi-square results corresponding to each toy i.e. array[toyindex][templateindex]
-          - where template index corresponds to a W mass hypothesis at the same index
-      - 1D array of W masses 
-      - Vector of TGraph pointers corresponding to each toy model
-          - each TGraph having been written to a root file 
-  
-  
-  //Unit normalize all of the template histograms
-  for (templateit = template_vect.begin(); templateit != template_vect.end(); templateit++) {
-    (*templateit)->Scale(1/((*templateit)->Integral()));
-  }
+  cout << "All vectors and iterators initialized.  template_vect is of length " << (this->templates).size() << ". toy_vect is of length " <<  (this->toys).size() << ". Wmass_vect is of length " << (this->Wmasses).size() << endl;
+  cout << (this->templates).front() << endl;
+  char scaledhname[200];
 
   int toyindex=0, templateindex=0;
   // Declare a vector of chi-square results, where the first dim represents the toys and second dim gives result for each template
   //vector<Double_t> chi2_results(template_vect.size());
-  Double_t chi2_results[toy_vect.size()][template_vect.size()];
-  Double_t Wmass_arr[Wmass_vect.size()];
-  copy(Wmass_vect.begin(), Wmass_vect.end(), Wmass_arr);
+  //Double_t chi2_results[toy_vect.size()][template_vect.size()];
+  //  Double_t chi2_results[1][5];
+  
+  // Copy template hypothesis info onto an array of fixed size to hopefully be accepted by TGraph->DrawGraph()
+  
+  Double_t Wmass_arr[ntemplates];
+  cout << "Copying TemplateStruct->Wmasses to an array" << endl;
+  copy((this->Wmasses).begin(), (this->Wmasses).end(), Wmass_arr);
+  
+  TGraph *chi2Plot = new TGraph(ntemplates);
+  //char chi2plot_name[1000];
+  string chi2plot_name = "chi2 plot";
+  Double_t chi2point;
+  /*
+  Double_t par0, par1, par2;
+  TF1 *chi2fit;
+  char chi2fit_name[100];  
+  */
+//Unit normalize all of the toy vectors and perform chi square test, saving the data to an array as you go
+  TCanvas* c2 = new TCanvas("cchi2", "chi2 with different W mass hypotheses");
+
+  for (toyit = (this->toys).begin(); toyit != (this->toys).end(); toyit++) {
+    //(*toyit)->Scale(1 / ((*toyit)->Integral()), "width");
+    //sprintf(scaledhname, "%s_scaled", (*toyit)->GetName());
+    //output->WriteTObject(*toyit, scaledhname, "Overwrite");
+    cout << "performing loop over toys" << endl;
+    if ((*toyit)->GetSumw2N() == 0) {
+      cout << "Warning! Weights do not seem to be stored" << endl;
+    }
+
+    for (templateit = (this->templates).begin(); templateit != (this->templates).end(); templateit++){
+      (*toyit)->Scale((*templateit)->Integral()/(*toyit)->Integral());
+      sprintf(scaledhname, "%s_scaledto_%s", (*toyit)->GetName(), (*templateit)->GetName());
+      output->WriteTObject(*toyit, scaledhname, "Overwrite");
+      chi2point = (*toyit)->Chi2Test((*templateit), "Chi2 WW");
+      
+      cout << "Copying chi2 result for toy " << toyindex << " and template " << templateindex << ": " << chi2point << endl;
+      chi2Plot->SetPoint(templateindex,Wmass_arr[templateindex],chi2point);
+      //chi2_results[toyindex][templateindex] = (*templateit)->Chi2Test((*toyit), "WW");
+      //cout << "Copying dummy result to chi2_results array for testing" << endl;
+      //chi2_results[toyindex][templateindex] = 12.0;
+      // Increment the template index, but adjust with modulo to avoid segmentation fault 
+      templateindex = (templateindex + 1) % (this->templates).size();
+    }
+    cout << "Drawing graph of toy " << toyindex << endl;
+    //chi2Plot->DrawGraph((this->templates).size(), Wmass_arr, chi2_results[toyindex]);
+    chi2Plot->SetMarkerColor(6);
+    chi2Plot->SetMarkerStyle(4);
+    chi2Plot->Draw();
+    //output->WriteTObject(TGraph(this->Wmasses, chi2_results), 
+    //graph_name.c_str(), "Overwrite");
+    cout << "Writing chi2 plot to root file." << endl;
+    //sprintf(chi2plot_name, "chi2_plot_%s_vs_%s", (*toyit)->GetName(), (*templateit)->GetName());
+    //cout << "Name of chi2 plot has been assigned" << endl;
+    output->WriteTObject(chi2Plot, chi2plot_name.c_str(), "Overwrite");
+    cout << "Write successful" << endl;
+    /*
+    sprintf(chi2fit_name, "chi2fit_%s_vs_%s", (*toyif)->GetName(), (*templateit)->GetName());
+    chi2fit = new TF1(chi2fit_name, "[0]*x*x+[1]*x+[2]");
+    chi2Plot->Fit(chi2fint_name, "", "", 79.9, 80.8);
+    */
+    toyindex++;
+  }
+  cout << "Saving chi2 plot as an image." << endl;
+  c2->Print("./plots/chi2Plot.png");
+  c2->Close();  
+
+
+  
+
+  
+  
+  output->Close();
+}
+
+void TemplateStruct::template_chi2 () {
+  
+  TFile *output = TFile::Open(this->output_name, "UPDATE");  
+  //vector<TH1F *> template_vect = this->templates;
+  //vector<TH1F *> toy_vect = this->toys;
+  //vector<Double_t> Wmass_vect = this->Wmasses;
+  vector<TH1F *>::iterator templateit;
+  vector<TH1F *>::iterator toyit;
+
+  cout << "All vectors and iterators initialized.  template_vect is of length " << (this->templates).size() << ". toy_vect is of length " <<  (this->toys).size() << ". Wmass_vect is of length " << (this->Wmasses).size() << endl;
+  cout << (this->templates).front() << endl;
+  
+  //Unit normalize all of the template histograms
+
+  for (templateit = (this->templates).begin(); templateit != (this->templates).end(); templateit++) {
+    cout << "Scaling template histogram at index " << distance((this->templates).begin(),templateit) << endl;
+    (*templateit)->Scale(1/((*templateit)->Integral()));
+    cout << "histogram has been scaled." << endl;
+  }
+  cout << "Template histograms have been scaled." << endl;
+
+  int toyindex=0, templateindex=0;
+  // Declare a vector of chi-square results, where the first dim represents the toys and second dim gives result for each template
+  //vector<Double_t> chi2_results(template_vect.size());
+  //Double_t chi2_results[toy_vect.size()][template_vect.size()];
+  Double_t chi2_results[1][5];
+  
+  // Copy template hypothesis info onto an array of fixed size to hopefully be accepted by TGraph->DrawGraph()
+  Double_t Wmass_arr[5];
+  cout << "Copying TemplateStruct->Wmasses to an array" << endl;
+  copy((this->Wmasses).begin(), (this->Wmasses).end(), Wmass_arr);
   TGraph *chi2Plot = new TGraph();
   string graph_name = "uniquename";
 
 //Unit normalize all of the toy vectors and perform chi square test, saving the data to an array as you go
-  for (toyit = toy_vect.begin(); toyit != toy_vect.end(); toyit++) {
-    (*toyit)->Scale(1 / ((*toyit)->Integral()));
-    
-    for (templateit = template_vect.begin(); templateit != template_vect.end(); templateit++){
-      //This is dangerous and hacky to overwrite in this way, just easier for proof of concept
-      //      chi2_results[templateindex] = (*templateit)->Chi2Test((*toyit), "WW");
-      chi2_results[toyindex][templateindex] = (*templateit)->Chi2Test((*toyit), "WW");
-      // Increment the template index, but adjust with modulo to avoid segmentation fault 
-      templateindex = (templateindex + 1) % template_vect.size();
-    }
+  TCanvas* c2 = new TCanvas("cchi2", "chi2 with different W mass hypotheses");
 
-    chi2Plot->DrawGraph(template_vect.size(), Wmass_arr, chi2_results[toyindex]);
+  for (toyit = (this->toys).begin(); toyit != (this->toys).end(); toyit++) {
+    (*toyit)->Scale(1 / ((*toyit)->Integral()));
+    for (templateit = (this->templates).begin(); templateit != (this->templates).end(); templateit++){
+      
+      cout << "Copying chi2 result for toy " << toyindex << " and template " << templateindex << endl;
+      chi2_results[toyindex][templateindex] = (*templateit)->Chi2Test((*toyit), "WW");
+      //cout << "Copying dummy result to chi2_results array for testing" << endl;
+      //chi2_results[toyindex][templateindex] = 12.0;
+      // Increment the template index, but adjust with modulo to avoid segmentation fault 
+      templateindex = (templateindex + 1) % (this->templates).size();
+    }
+    cout << "Drawing graph of toy " << toyindex << endl;
+    chi2Plot->DrawGraph((this->templates).size(), Wmass_arr, chi2_results[toyindex]);
     
     //output->WriteTObject(TGraph(this->Wmasses, chi2_results), 
     //graph_name.c_str(), "Overwrite");
+    cout << "Writing chi2 plot to root file." << endl;
     output->WriteTObject(chi2Plot, graph_name.c_str(), "Overwrite");
     toyindex++;
   }
-  
-  // Next step: Plot TGraphs of the chi square results vs W boson mass - need to figure out how to set the points after initialization
-  
-  for (int i=0; i < toy_vect.size; i++) {
-    chi2Plot->DrawGraph(template_vect.size(), this->Wmasses, chi2_results[i]);
-    output->WriteTObject(chi2Plot, "get a unique name" ,"Overwrite");
-    }
-      // A potential next step: open TCanvas to write TGraphs of different toys to the same plot
+  cout << "Saving chi2 plot as an image." << endl;
+  c2->Print("./plots/chi2Plot.png");
+  c2->Close();  
+        // A potential next step: open TCanvas to write TGraphs of different toys to the same plot
 }
-*/
+
 /*
 int main () {
   return 0;
