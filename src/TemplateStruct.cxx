@@ -352,6 +352,7 @@ void TemplateStruct::template_chi2 () {
 
   output->Close();
 
+
   /*  cout << "All vectors and iterators initialized.  template_vect is of length " << (this->templates).size() << ". toy_vect is of length " <<  (this->toys).size() << ". Wmass_vect is of length " << (this->Wmasses).size() << endl;
   cout << (this->templates).front() << endl;
   

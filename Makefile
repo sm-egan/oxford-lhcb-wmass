@@ -15,7 +15,7 @@ all: bin/build_compare_histograms.exe  #bin/create_templates.exe
 #	@mkdir -p bin/
 #	$(#CC) $^ -o $#@ -ldl -I./include/ $(#ROOT) $(#LHAPDF) $(#CFLAGS)
 
-bin/build_compare_histograms.exe: src/build_compare_histograms.cxx src/TemplateStruct.cxx src/TemplateStruct.h
+bin/build_compare_histograms.exe: src/build_compare_histograms.cxx
 	@mkdir -p tmp/
 	@mkdir -p bin/
 	$(CC) $^ -o $@ -ldl -I./include/ $(ROOT) $(LHAPDF) $(CFLAGS)
