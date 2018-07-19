@@ -24,7 +24,6 @@
 #include "TSystem.h"
 #include "TH2F.h"
 #include "TGraph.h"
-
 #include <vector>
 
 #include "TemplateStruct.h"
@@ -51,8 +50,7 @@ void TemplateStruct::drawH_BW (TChain* EventChain, string ReweightBranch, string
 
   string s = "Reweight"+ sreweight.str() +"Nominal"+ snominal.str();
   Double_t gamma = 2.15553;
-  Double_t data_split = this->split_ratio;
-  Long64_t maxentries = lrint((EventChain->GetEntries())*data_split);
+  Long64_t maxentries = lrint((EventChain->GetEntries())*(this->split_ratio));
 
   TH1::SetDefaultSumw2();
   TH1F *hweighted = new TH1F(s.c_str(), HistBranch.c_str(), hist_dims[0], hist_dims[1], hist_dims[2]);
@@ -160,27 +158,6 @@ void TemplateStruct::create_templates(int hist_dims[3], int ntemplates=5, int nd
 	}*/
     }
 
-    bool firsthist = true;
-    int colourit = 1;
-    vector<TH1F *>::iterator templateit;
-    // Below might be necessary for larger number of hypotheses
-    //int lineit = 1;
-    
-    TCanvas* c = new TCanvas("cBW", "mu PT with different W mass hypotheses");
-      
-    for (templateit = this->templates.begin(); templateit != this->templates.end(); templateit++, colourit++) {
-      //brackets around *templateit ensure that we are acting on the pointer to the TH1F, not the iterative pointer to the pointer  
-      output->WriteTObject(*templateit, (*templateit)->GetName(),"Overwrite");
-      (*templateit)->SetLineColor(colourit);
-
-      if(firsthist) {
-	(*templateit)->Draw();
-	firsthist = false;
-      } else (*templateit)->Draw("SAME");
-    }
-    c->Print("~/oxford-lhcb-wmass/plots/WmasshypHist.png");
-    c->Print("~/oxford-lhcb-wmass/plots/WmasshypHist.pdf");
-    c->Close();
     
     //TemplateStruct ts; This function is already acting on an instance
     //ts.Wmasses = Wmass_vect; Should be filled already in the drawH_BW function
@@ -232,7 +209,7 @@ void TemplateStruct::create_templates(int hist_dims[3], int ntemplates=5, int nd
       cout << "Warning! Weights do not seem to be stored" << endl;
     }
 
-    for (templateit = (this->templates).begin(); templateit != (this->templates).end(); templateit++){
+    for (vector<TH1F *>::iterator templateit = (this->templates).begin(); templateit != (this->templates).end(); templateit++){
       (*toyit)->Scale((*templateit)->Integral()/(*toyit)->Integral());
       sprintf(scaledhname, "%s_scaledto_%s", (*toyit)->GetName(), (*templateit)->GetName());
       output->WriteTObject(*toyit, scaledhname, "Overwrite");
@@ -269,24 +246,113 @@ void TemplateStruct::create_templates(int hist_dims[3], int ntemplates=5, int nd
   c2->Print("./plots/chi2Plot.png");
   c2->Close();  
 
-
-  
-
-  
-  
   output->Close();
+}
+
+void TemplateStruct::plot_overlaid_histograms () {
+  TFile *output = TFile::Open(this->output_name, "UPDATE");  
+  bool firsthist = true;
+  int colourit = 1;
+  vector<TH1F *>::iterator templateit;
+    // Below might be necessary for larger number of hypotheses
+    //int lineit = 1;
+    
+  TCanvas* c = new TCanvas("cBW", "mu PT with different W mass hypotheses");
+      
+  for (templateit = this->templates.begin(); templateit != this->templates.end(); templateit++, colourit++) {
+      //brackets around *templateit ensure that we are acting on the pointer to the TH1F, not the iterative pointer to the pointer  
+    output->WriteTObject(*templateit, (*templateit)->GetName(),"Overwrite");
+    (*templateit)->SetLineColor(colourit);
+
+    if(firsthist) {
+      (*templateit)->Draw();
+      firsthist = false;
+    } else (*templateit)->Draw("SAME");
+  }
+  c->Print("~/oxford-lhcb-wmass/plots/templatesHist.png");
+  c->Print("~/oxford-lhcb-wmass/plots/templatesHist.pdf");
+  c->Close();    
 }
 
 void TemplateStruct::template_chi2 () {
   
   TFile *output = TFile::Open(this->output_name, "UPDATE");  
-  //vector<TH1F *> template_vect = this->templates;
-  //vector<TH1F *> toy_vect = this->toys;
-  //vector<Double_t> Wmass_vect = this->Wmasses;
   vector<TH1F *>::iterator templateit;
   vector<TH1F *>::iterator toyit;
+  int ntemplates = this->Wmasses.size();
 
   cout << "All vectors and iterators initialized.  template_vect is of length " << (this->templates).size() << ". toy_vect is of length " <<  (this->toys).size() << ". Wmass_vect is of length " << (this->Wmasses).size() << endl;
+  cout << (this->templates).front() << endl;
+  char scaledhname[200];
+
+  int toyindex=0, templateindex=0;  
+  // Copy template hypothesis info onto an array of fixed size to hopefully be accepted by TGraph->DrawGraph()
+  
+  Double_t Wmass_arr[ntemplates];
+  cout << "Copying TemplateStruct->Wmasses to an array" << endl;
+  copy((this->Wmasses).begin(), (this->Wmasses).end(), Wmass_arr);
+  
+  TGraph *chi2Plot = new TGraph(ntemplates);
+  //char chi2plot_name[1000];
+  string chi2plot_name = "chi2 plot";
+  Double_t chi2point;
+  /*
+  Double_t par0, par1, par2;
+  TF1 *chi2fit;
+  char chi2fit_name[100];  
+  */
+//Unit normalize all of the toy vectors and perform chi square test, saving the data to an array as you go
+  TCanvas* c2 = new TCanvas("cchi2", "chi2 with different W mass hypotheses");
+
+  for (toyit = (this->toys).begin(); toyit != (this->toys).end(); toyit++) {
+    //(*toyit)->Scale(1 / ((*toyit)->Integral()), "width");
+    //sprintf(scaledhname, "%s_scaled", (*toyit)->GetName());
+    //output->WriteTObject(*toyit, scaledhname, "Overwrite");
+    cout << "performing loop over toys" << endl;
+    if ((*toyit)->GetSumw2N() == 0) {
+      cout << "Warning! Weights do not seem to be stored" << endl;
+    }
+
+    for (templateit = (this->templates).begin(); templateit != (this->templates).end(); templateit++){
+      (*toyit)->Scale((*templateit)->Integral()/(*toyit)->Integral());
+      sprintf(scaledhname, "%s_scaledto_%s", (*toyit)->GetName(), (*templateit)->GetName());
+      output->WriteTObject(*toyit, scaledhname, "Overwrite");
+      chi2point = (*toyit)->Chi2Test((*templateit), "Chi2 WW");
+      
+      cout << "Copying chi2 result for toy " << toyindex << " and template " << templateindex << ": " << chi2point << endl;
+      chi2Plot->SetPoint(templateindex,Wmass_arr[templateindex],chi2point);
+      //chi2_results[toyindex][templateindex] = (*templateit)->Chi2Test((*toyit), "WW");
+      //cout << "Copying dummy result to chi2_results array for testing" << endl;
+      //chi2_results[toyindex][templateindex] = 12.0;
+      // Increment the template index, but adjust with modulo to avoid segmentation fault 
+      templateindex = (templateindex + 1) % (this->templates).size();
+    }
+    cout << "Drawing graph of toy " << toyindex << endl;
+    //chi2Plot->DrawGraph((this->templates).size(), Wmass_arr, chi2_results[toyindex]);
+    chi2Plot->SetMarkerColor(4);
+    chi2Plot->SetMarkerStyle(8);
+    chi2Plot->Draw("AP");
+    
+    
+    cout << "Writing chi2 plot to root file." << endl;
+    //sprintf(chi2plot_name, "chi2_plot_%s_vs_%s", (*toyit)->GetName(), (*templateit)->GetName());
+    //cout << "Name of chi2 plot has been assigned" << endl;
+    output->WriteTObject(chi2Plot, chi2plot_name.c_str(), "Overwrite");
+    cout << "Write successful" << endl;
+    /*
+    sprintf(chi2fit_name, "chi2fit_%s_vs_%s", (*toyif)->GetName(), (*templateit)->GetName());
+    chi2fit = new TF1(chi2fit_name, "[0]*x*x+[1]*x+[2]");
+    chi2Plot->Fit(chi2fint_name, "", "", 79.9, 80.8);
+    */
+    toyindex++;
+  }
+  cout << "Saving chi2 plot as an image." << endl;
+  c2->Print("./plots/chi2Plot.png");
+  c2->Close();  
+
+  output->Close();
+
+  /*  cout << "All vectors and iterators initialized.  template_vect is of length " << (this->templates).size() << ". toy_vect is of length " <<  (this->toys).size() << ". Wmass_vect is of length " << (this->Wmasses).size() << endl;
   cout << (this->templates).front() << endl;
   
   //Unit normalize all of the template histograms
@@ -336,8 +402,9 @@ void TemplateStruct::template_chi2 () {
   }
   cout << "Saving chi2 plot as an image." << endl;
   c2->Print("./plots/chi2Plot.png");
-  c2->Close();  
+  c2->Close(); */ 
         // A potential next step: open TCanvas to write TGraphs of different toys to the same plot
+
 }
 
 /*

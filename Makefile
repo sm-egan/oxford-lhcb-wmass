@@ -8,12 +8,18 @@ CFLAGS = -O3  -Wall -std=c++1y -pedantic -Wshadow
 #CC=g++
 CC=$(CXX)
 
-all: bin/create_templates.exe
+all: bin/build_compare_histograms.exe  #bin/create_templates.exe
 
-bin/create_templates.exe: src/create_templates.cxx src/TemplateStruct.cxx src/TemplateStruct.h
+#bin/create_templates.exe: src/create_templates.cxx src/TemplateStruct.cxx src/TemplateStruct.h
+#	@mkdir -p tmp/
+#	@mkdir -p bin/
+#	$(#CC) $^ -o $#@ -ldl -I./include/ $(#ROOT) $(#LHAPDF) $(#CFLAGS)
+
+bin/build_compare_histograms.exe: src/build_compare_histograms.cxx src/TemplateStruct.cxx src/TemplateStruct.h
 	@mkdir -p tmp/
 	@mkdir -p bin/
 	$(CC) $^ -o $@ -ldl -I./include/ $(ROOT) $(LHAPDF) $(CFLAGS)
+
 
 #bin/%.o: src/%.cxx src/%.h
 #	$(#CC) $< -o $#@ $(#ROOT) $(#LHAPDF) $(#CFLAGS)
