@@ -248,9 +248,9 @@ void TemplateStruct::create_templates(int hist_dims[3], int ntemplates=5, int nd
     }
     cout << "Drawing graph of toy " << toyindex << endl;
     //chi2Plot->DrawGraph((this->templates).size(), Wmass_arr, chi2_results[toyindex]);
-    chi2Plot->SetMarkerColor(6);
-    chi2Plot->SetMarkerStyle(4);
-    chi2Plot->Draw();
+    chi2Plot->SetMarkerColor(4);
+    chi2Plot->SetMarkerStyle(8);
+    chi2Plot->Draw("AP");
     //output->WriteTObject(TGraph(this->Wmasses, chi2_results), 
     //graph_name.c_str(), "Overwrite");
     cout << "Writing chi2 plot to root file." << endl;
