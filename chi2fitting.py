@@ -1,6 +1,6 @@
 #from ROOT import gROOT as R
 #R.SetBatch(True) 
-#import numpy as np
+import numpy as np
 import ROOT as R
 import csv
 from decimal import *
@@ -48,7 +48,8 @@ for toyset in range (0,2):
     
         p0_init = min(chi2stats)
         print("p0_init: " + str(p0_init))
-        p1_init = 80.5
+        p1_init = chi2Plot.GetX()[np.argmin(chi2stats)]
+        print("p1_init: " + str(p1_init))
         p2_init = 0.01
     
     #print(chi2max)
@@ -99,6 +100,24 @@ for toyset in range (0,2):
         print('chi2 test statistics: ' + str(len(chi2min_fit)))
     '''
 
+    fig, (axW, axChi) = plt.subplots(2, sharex=True)
+    axW.scatter(pTParams[toyset], Wmass_pred[toyset])
+    axW.errorbar(pTParams[toyset], Wmass_pred[toyset], yerr=Wmass_err[toyset], fmt='o')
+    axW.set_ylabel('Predicted mass of W (GeV)')
+    
+    setmax = max(pTParams[toyset])
+
+    xmax = setmax + 0.1*setmax
+    xmin = -0.1*setmax
+    axW.set_xlim([xmin,xmax])
+
+    axChi.scatter(pTParams[toyset], chi2min_fit[toyset])
+    axChi.set_ylabel('Test stat. of W template fit')
+    axChi.set_xlabel('Mean percent pT smear (Gaussian)')
+
+    fig.savefig('./plots/WMpredictions_pTmethod' + str(toyset) + '.png')
+
+'''
 fig1, (axW, axChi) = plt.subplots(2, sharex=True)
 axW.scatter(pTParams[0], Wmass_pred[0])
 axW.errorbar(pTParams[0], Wmass_pred[0], yerr=Wmass_err[0], fmt='o')
@@ -129,3 +148,4 @@ ax2Chi.set_ylabel('Test stat. of W template fit')
 ax2Chi.set_xlabel('Mean percent pT smear (Gaussian)')
 
 fig2.savefig("./plots/gaus_pTdependent_smear.png")
+'''
