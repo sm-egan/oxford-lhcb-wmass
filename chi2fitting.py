@@ -6,19 +6,28 @@ import csv
 from decimal import *
 import matplotlib.pyplot as plt
 
-input = R.TFile.Open("./rootfiles/build_compare_templates.root", "UPDATE")
+
+#### MANUALLY SET THE DESIRED FILE AND NUMBER OF PT ADJUSTMENT METHODS HERE ###
+filename = "./rootfiles/build_compare_templatesWm.root"
+input = R.TFile.Open(filename, "UPDATE")
+npTmethods = 2
+
 
 pTParams = [[]]
-Wmass_pred = [[]*2]
-Wmass_err = [[]*2]
-chi2min_fit = [[]*2]
+Wmass_pred = [[]*npTmethods]
+Wmass_err = [[]*npTmethods]
+chi2min_fit = [[]*npTmethods]
 
+Wcharge = "Wm"
+
+### INITIALIZE THE FIT FUNCTION AND NAME THE PARAMETERS ACCORDINGLY ###
 quadfit = R.TF1("chi2_quadfit", "[0]+(1/([2]**2))*(x-[1])**2", 79.8, 80.8)
 quadfit.SetParName(0,"MinChi2")
 quadfit.SetParName(1,"WMass")
 quadfit.SetParName(2,"WMassUncertainty")
 
 
+### READ IN THE PT PARAMETERS FROM CSV FILE OUTPUT BY build_compare_histograms.exe ###
 firstrow = True 
 with open('./pTparameters.csv') as csvfile:
     readCSV = csv.reader(csvfile, delimiter = ',', quoting=csv.QUOTE_NONNUMERIC)
@@ -29,21 +38,24 @@ with open('./pTparameters.csv') as csvfile:
         else:
             pTParams.append(row)
 
+print('Imported pT parameters')
 print(pTParams)
-print len(pTParams)
-print(pTParams[1])
 
 
-for toyset in range (0,2):
+### LOOP OVER THE PT ADJUSTMENT METHODS AND PRODUCE A 2-SUBPLOT FIGURE SHOWING BEST FIT W MASS PREDICTION AND MINIMUM CHI SQUARE FOR EACH ###
+for toyset in range (0,npTmethods):
     print('Now plotting set of toys: ' + str(toyset))
     ntoys = len(pTParams[toyset])
     for toyit in range (0, ntoys):    
-
-        chi2Plot_name = "chi2plot" + str(toyset) + str(toyit)    
-        print("Loading graph: " + chi2Plot_name)
+        print('Now plotting toy' + str(toyit))
+        if filename.find("Wm") > -1:
+            chi2Plot_name = "chi2plot" + Wcharge + str(toyset) + str(toyit)    
+            print("Loading graph: " + chi2Plot_name)
+        else:
+            Wcharge = "Wp"
+            chi2Plot_name = "chi2plot" + Wcharge + str(toyset) + str(toyit)    
+            
         chi2Plot = input.Get(chi2Plot_name)
-        print(type(chi2Plot))
-    
         chi2stats = chi2Plot.GetY()
     
         p0_init = min(chi2stats)
@@ -87,7 +99,7 @@ for toyset in range (0,2):
     #legend->SetHeader()
     #legend->Draw()
 
-        chi2image = "./plots/chi2Plot" + str(toyset) +  str(toyit) + "_fit.png"
+        chi2image = "./plots/chi2Plot" + Wcharge + str(toyset) +  str(toyit) + "_fit.png"
         c.Print(chi2image)
         c.Close()
 
@@ -99,7 +111,7 @@ for toyset in range (0,2):
         print('pT parameters: ' + str(len(pTParams)))
         print('chi2 test statistics: ' + str(len(chi2min_fit)))
     '''
-
+    print('Plotting W predictions and minimum chi square for toy ' + str(toyset))
     fig, (axW, axChi) = plt.subplots(2, sharex=True)
     axW.scatter(pTParams[toyset], Wmass_pred[toyset])
     axW.errorbar(pTParams[toyset], Wmass_pred[toyset], yerr=Wmass_err[toyset], fmt='o')
@@ -113,39 +125,10 @@ for toyset in range (0,2):
 
     axChi.scatter(pTParams[toyset], chi2min_fit[toyset])
     axChi.set_ylabel('Test stat. of W template fit')
-    axChi.set_xlabel('Mean percent pT smear (Gaussian)')
+    axChi.set_xlabel('pT adjustment parameter')
 
-    fig.savefig('./plots/WMpredictions_pTmethod' + str(toyset) + '.png')
-
-'''
-fig1, (axW, axChi) = plt.subplots(2, sharex=True)
-axW.scatter(pTParams[0], Wmass_pred[0])
-axW.errorbar(pTParams[0], Wmass_pred[0], yerr=Wmass_err[0], fmt='o')
-axW.set_ylabel('Predicted mass of W (GeV)')
-
-max1 = max(pTParams[0]) + 0.1*max(pTParams[0])
-min1 = -0.1*max(pTParams[0])
-axW.set_xlim([min1,max1])
-
-axChi.scatter(pTParams[0], chi2min_fit[0])
-axChi.set_ylabel('Test stat. of W template fit')
-axChi.set_xlabel('Mean percent pT smear (Gaussian)')
-
-fig1.savefig("./plots/gaus_pT_smear.png")
+    fig.savefig('./plots/' + Wcharge + 'predictions_pTmethod' + str(toyset) + '.png')
 
 
-fig2, (ax2W, ax2Chi) = plt.subplots(2, sharex=True)
-ax2W.scatter(pTParams[1], Wmass_pred[1])
-ax2W.errorbar(pTParams[1], Wmass_pred[1], yerr=Wmass_err[1], fmt='o')
-ax2W.set_ylabel('Predicted mass of W (GeV)')
 
-max2 = max(pTParams[1]) + 0.1*max(pTParams[1])
-min2 = -0.1*max(pTParams[1])
-ax2W.set_xlim([min2,max2])
-
-ax2Chi.scatter(pTParams[1], chi2min_fit[1])
-ax2Chi.set_ylabel('Test stat. of W template fit')
-ax2Chi.set_xlabel('Mean percent pT smear (Gaussian)')
-
-fig2.savefig("./plots/gaus_pTdependent_smear.png")
-'''
+### PLOT HISTOGRAMS OF TOYS OVERLAID WITH NOMINAL WMASS HISTOGRAM, ALONG WITH RATIOS ###
