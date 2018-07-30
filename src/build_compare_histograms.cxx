@@ -27,39 +27,27 @@
 #include "TemplateStruct.h"
 #include "TRandom.h"
 #include <fstream>
+#include <ctime>
 
 using namespace std;
 
-/*
-void write_vector (ofstream bufferstream, vector<Double_t> data_vect) {
-
-  if (!bufferstream.is_open()) {
-      cout << "ERROR: ofstream not associated to open file" << endl;  
-  } else {
-    for (vector<Double_t>::iterator data_it = data_vect.begin(); data_it != data_vect.end(); ++data_it) { 
-      if (data_it == data_vect.begin()) {
-	bufferstream << *data_it; 
-      } else {
-	bufferstream << ',' << *data_it; 
-      }
-    }
-    cout << '\n';
-  }
-}
-*/ 
-
-int main(){
+ 
+int main ( ) {
   int hist_dims[3] = {40,30,50};
-  int ndata_files = 1;
+
+  int ndata_files = 20;
+  string Wcharge = "Wm";
+  int npTmethods = 4;
+
   int ntemplates = 11;
   int ntoys = 6;
   Double_t Mnom = 80.4;
+  
   Double_t gamma = 2.15553;
   Double_t echarge = 1.602176565e-19;
-
-  string Wcharge = "Wm";
-  int npTmethods = 3;
   
+  double pTparam_limits[8] = {0.0, 0.025, 0.0, 0.001, 0.999, 1.0005, 0.0, 0.3e-23};
+
   vector<TH1F *> templates;
   vector< vector<TH1F *> > toys(npTmethods);
   vector<Double_t> Wmasses;
@@ -68,7 +56,18 @@ int main(){
   vector<TH1F *>::iterator toyit, templateit;
   vector<Double_t>::iterator Wmassit, pTparamsit;
 
-  string output_name = "~/oxford-lhcb-wmass/rootfiles/build_compare_templates" + Wcharge + ".root";
+  time_t rawtime;
+  struct tm * timeinfo;
+  char tbuffer[80];
+
+  time (&rawtime);
+  timeinfo = localtime(&rawtime);
+
+  strftime(tbuffer,sizeof(tbuffer),"%d%m%Y-%I%M",timeinfo);
+  string str(tbuffer);
+
+  string fileinfo = Wcharge + "_" + to_string(ndata_files) + "ntuples_" + tbuffer;
+  string output_name = "~/oxford-lhcb-wmass/rootfiles/" + fileinfo + ".root";
 
   TH1::SetDefaultSumw2();
 
@@ -81,7 +80,7 @@ int main(){
   //snominal << fixed << setprecision(2) << Mnom;
   string template_name;
   string toy_name1 = "GausSmear";
-  string toy_name2 = "GausSmear_pTdependent";
+ string toy_name2 = "GausSmear_pTdependent";
   string toy_name3 = "ConstFactor";
   string toy_name4 = "CurveOffset";
 
@@ -102,52 +101,86 @@ int main(){
 
   cout << "error marker 2" << endl;
   
-  for (Double_t pTparam = 0.0; pTparam <=0.03; pTparam += (0.03)/(ntoys-1)) {
+  //stringstream value;
+  int toyindex=0, templateindex=0;
+  char hist_title[100];
+
+  for (Double_t pTparam = pTparam_limits[0]; pTparam <= pTparam_limits[1]; pTparam += (pTparam_limits[1]-pTparam_limits[0])/(ntoys-1)) {
     pTparams[0].push_back(pTparam);
-    toy_name1 =  toy_name1  + Wcharge + to_string(pTparam);
-    TH1F *hpT_toy = new TH1F(toy_name1.c_str(), "sigma mu_PT ~ cst", hist_dims[0], hist_dims[1], hist_dims[2]);
+    //value << fixed << setprecision(3) << pTparam;
+    toy_name1 =  toy_name1  + Wcharge + to_string(toyindex);
+    sprintf(hist_title, "sigma mu_PT ~ %f", pTparam);
+    TH1F *hpT_toy = new TH1F(toy_name1.c_str(), hist_title, hist_dims[0], hist_dims[1], hist_dims[2]);
     toys[0].push_back(hpT_toy);
+    
     toy_name1 = "GausSmear";
+    //value.str(string());
+    ++toyindex;
   }
 
   cout << "error marker 3" << endl;
 
-  for (Double_t pTparam = 0.0; pTparam <= 0.00075; pTparam += (0.00075)/(ntoys-1)) {
+  if (npTmethods > 1) {
+    toyindex = 0;
+    for (Double_t pTparam = pTparam_limits[2]; pTparam <= pTparam_limits[3]; pTparam += (pTparam_limits[3]-pTparam_limits[2])/(ntoys-1)) {
       pTparams[1].push_back(pTparam);
-      toy_name2 = toy_name2  + Wcharge+ to_string(pTparam);
-      TH1F *hpT_toy = new TH1F(toy_name2.c_str(), "sigma mu_PT ~ cstmu_PT", hist_dims[0], hist_dims[1], hist_dims[2]);
+
+      //value << fixed << setprecision(5) << pTparam;
+
+      toy_name2 = toy_name2  + Wcharge + to_string(toyindex);
+      sprintf(hist_title, "sigma mu_PT ~ %f * mu_PT", pTparam);
+      TH1F *hpT_toy = new TH1F(toy_name2.c_str(), hist_title, hist_dims[0], hist_dims[1], hist_dims[2]);
       toys[1].push_back(hpT_toy);
+
       toy_name2 = "GausSmear_pTdependent";
-  }
-  
-  /*
-  cout << "error marker 3.1" << endl;
-  
-  double coffset = 1.0e-23;
-  
-  for (Double_t pTparam = 0.0; pTparam <= coffset; pTparam += coffset/(ntoys-1)) {
-    pTparams[2].push_back(pTparam);
-    toy_name3 = toy_name3 + Wcharge + to_string(pTparam);
-    TH1F *hpT_toy = new TH1F(toy_name3.c_str(), "charge/mu_PT plus cst", hist_dims[0], hist_dims[1], hist_dims[2]);
-    toys[2].push_back(hpT_toy);
-    toy_name3 = "CurvOffset";
-  }
-  cout << "error marker 4" << endl;
-  */ 
-
-  for (Double_t pTparam = 0.0; pTparam <= 0.001; pTparam += (0.001)/(ntoys-1)) {
-    pTparams[2].push_back(pTparam);
-    toy_name3 = toy_name3 + Wcharge + to_string(pTparam);
-    TH1F *hpT_toy = new TH1F(toy_name3.c_str(), "mu_PT ~ kmu_PT", hist_dims[0], hist_dims[1], hist_dims[2]);
-    toys[2].push_back(hpT_toy);
-    toy_name3 = "ConstFactor";
+      //value.str(string());
+      ++toyindex;
+    }
+    cout << "error marker 4" << endl;
   }
 
-  //for (Double_t pTparam =0.0;
+  if (npTmethods > 2) {
+    toyindex = 0;
+    for (Double_t pTparam = pTparam_limits[4]; pTparam <= pTparam_limits[5]; pTparam += (pTparam_limits[5]-pTparam_limits[4])/(ntoys-1)) {
+      pTparams[2].push_back(pTparam);
+
+      //value << fixed << setprecision(4) << pTparam;
+      toy_name3 = toy_name3 + Wcharge + to_string(toyindex);
+      sprintf(hist_title, "mu_PT -> %f * mu_PT", pTparam);
+      TH1F *hpT_toy = new TH1F(toy_name3.c_str(), hist_title, hist_dims[0], hist_dims[1], hist_dims[2]);
+      toys[2].push_back(hpT_toy);
+
+      toy_name3 = "ConstFactor";
+      //value.str(string());
+      ++toyindex;
+    }
+    cout <<"error marker 5" << endl;
+  }
+
+  if (npTmethods > 3) {
+    stringstream coffset_sn;
+    toyindex=0;
+    for (Double_t pTparam = pTparam_limits[6]; pTparam <= pTparam_limits[7]; pTparam += (pTparam_limits[7]-pTparam_limits[6])/(ntoys-1)) {
+      pTparams[3].push_back(pTparam);
+
+      coffset_sn << scientific << setprecision(2) << pTparam;
+
+      toy_name4 = toy_name4 + Wcharge + to_string(toyindex);
+      sprintf(hist_title, "charge/mu_PT -> charge/mu_PT + %s", coffset_sn.str().c_str());
+      TH1F *hpT_toy = new TH1F(toy_name4.c_str(), hist_title, hist_dims[0], hist_dims[1], hist_dims[2]);
+      toys[3].push_back(hpT_toy);
+
+      toy_name4 = "CurveOffset";
+      coffset_sn.str(string());
+      //value.str(string());
+      ++toyindex;
+    }
+    cout << "error marker 6" << endl;
+  }
 
   
-  ofstream pT_ofs ("./pTparameters.csv", ofstream::out);
-  cout << "error marker 5" << endl;
+  string parameterfile = "./pTparameters/" + fileinfo + ".csv";
+  ofstream pT_ofs (parameterfile, ofstream::out);
 
   for (int vect_row = 0; vect_row < pTparams.size(); ++vect_row) {
     for (vector<Double_t>::iterator data_it = pTparams[vect_row].begin(); data_it != pTparams[vect_row].end(); ++data_it) { 
@@ -162,7 +195,6 @@ int main(){
   
   pT_ofs.close();
 
-  int toyindex, templateindex;
 
   //  cout << "Error marker 2" << endl;
 
@@ -179,6 +211,7 @@ int main(){
   
 //Declaration of leaves types
   Float_t prop_M, mu_PT;
+  Float_t mu_PTadj;
   MCDecayTree->SetBranchAddress("mu_PT", &mu_PT);
   MCDecayTree->SetBranchAddress("prop_M", &prop_M);
 
@@ -190,52 +223,83 @@ int main(){
   cout << "nentries: " << nentries << endl;
   Long64_t nbytes = 0;
 
+  cout << "TESTING STRING COMPARE STATEMENT" << endl;
+  if (Wcharge.compare("Wm") == 0) {
+    cout << "The compare method correctly recognizes the Wcharge string as Wm" << endl;
+  } else {
+    cout << "Compare does not recognize equality of Wm with Wcharge" << endl;
+  }
+
+  TH1F *test1 = new TH1F("test1", "Fill without adjustment", hist_dims[0], hist_dims[1], hist_dims[2]);
+  TH1F *test2 = new TH1F("test2", "Fill without adjustment", hist_dims[0], hist_dims[1], hist_dims[2]);
+
+  TH1F *propM = new TH1F("propM", "propM from simulation", 40, 75, 85);
+  propM->GetXaxis()->SetTitle("Mass of W propagator");
+  propM->GetYaxis()->SetTitle("Counts");
+
+  if(Wcharge.compare("Wm") == 0) {   
+    echarge = -echarge;
+  }
 
   for (Long64_t eventit=0; eventit < nentries; eventit++) { //usually i< nentries*split_ratio for full data set
     nbytes += MCDecayTree->GetEntry(eventit);
-    
-    //cout << "error marker 3" << endl;
-    //cout << "currently at " << eventit << "th iteration" << endl;
+    propM->Fill(prop_M);
 
-    //if(mu_PT > 30 && mu_PT < 50){ // apply a cut
-      if (eventit%2 == 0){
+    if (eventit%2 == 0){
+      
+      test1->Fill(mu_PT);
 
-	toyindex=0;
-	for ( auto pTparam0 : pTparams[0] ) {  // (pTparamsit = pTparams.begin(); pTparamsit != pTparams.end(); ++pTparamsit) {
+      toyindex=0;
+      for ( auto pTparam0 : pTparams[0] ) {  // (pTparamsit = pTparams.begin(); pTparamsit != pTparams.end(); ++pTparamsit) {
 	//cout << "error marker 4" <<endl;
-	  mu_PT = mu_PT*gRandom->Gaus(1, pTparam0);
-	  toys[0][toyindex]->Fill(mu_PT);
-	  ++toyindex;
-	}
-
+	mu_PTadj = mu_PT*gRandom->Gaus(1, pTparam0);
+	toys[0][toyindex]->Fill(mu_PTadj);
+	++toyindex;
+      }
+      
+      if (npTmethods > 1) {
 	toyindex=0;
 	for ( auto pTparam1 : pTparams[1] ) {  // (pTparamsit = pTparams.begin(); pTparamsit != pTparams.end(); ++pTparamsit) {
-	//cout << "error marker 4" <<endl;
-	  mu_PT = mu_PT*gRandom->Gaus(1, pTparam1*mu_PT);
-	  toys[1][toyindex]->Fill(mu_PT);
+	    //cout << "error marker 4" <<endl;
+	  mu_PTadj = mu_PT*gRandom->Gaus(1, pTparam1*mu_PT);
+	  toys[1][toyindex]->Fill(mu_PTadj);
 	  ++toyindex;
-	}
-	
-	toyindex=0;
-	for ( auto pTparam2 : pTparams[2] ) {
-	  mu_PT = mu_PT*pTparam2;
-	  toys[2][toyindex]->Fill(mu_PT);
-	  ++toyindex;
-	}
-	
-      
-      } else {
-	templateindex = 0;
-	const auto denominator = TMath::BreitWigner(prop_M, Mnom, gamma); 
-	for ( auto Wmass : Wmasses ){ //Wmassit = Wmasses.begin(); Wmassit != Wmasses.end(); ++Wmassit) {
-	  //cout << "error marker 5" <<endl;
-	  templates[templateindex]->Fill(mu_PT, TMath::BreitWigner(prop_M, Wmass, gamma)/denominator);
-	  //templateindex = (templateindex + 1) % templates.size();
-	  ++templateindex;
-	  //cout << "templateindex is currently: " << templateindex <<endl;
 	}
       }
-      //}
+	
+      if (npTmethods > 2) {
+	toyindex=0;
+	for ( auto pTparam2 : pTparams[2] ) {
+	  mu_PTadj = mu_PT*pTparam2;
+	  toys[2][toyindex]->Fill(mu_PTadj);
+	  ++toyindex;
+	}
+      }
+	
+      if (npTmethods > 3) {
+	toyindex=0;
+	for ( auto pTparam3 : pTparams[3] ) {
+	  
+	  mu_PTadj = echarge*(1/(echarge/mu_PT + pTparam3));
+	  toys[3][toyindex]->Fill(mu_PTadj);
+	  ++toyindex;
+	}
+      }
+
+    } else {
+      templateindex = 0;
+      const auto denominator = TMath::BreitWigner(prop_M, Mnom, gamma); 
+      
+      test2->Fill(mu_PT);
+
+      for ( auto Wmass : Wmasses ){ //Wmassit = Wmasses.begin(); Wmassit != Wmasses.end(); ++Wmassit) {
+	  //cout << "error marker 5" <<endl;
+	templates[templateindex]->Fill(mu_PT, TMath::BreitWigner(prop_M, Wmass, gamma)/denominator);
+	  //templateindex = (templateindex + 1) % templates.size();
+	++templateindex;
+	  //cout << "templateindex is currently: " << templateindex <<endl;
+      }
+    }
   }
  
 
@@ -258,21 +322,6 @@ int main(){
   c->Print(templatesHname.c_str());
   c->Close();    
 
-       /*
-  TCanvas* c1 = new TCanvas("cPTsmear", "mu PT with Gaussian smear");
-      
-  for (toyit = toys[0].begin(); toyit != toys[0].end(); toyit++, colourit++) {
-    (*toyit)->SetLineColor(colourit);
-
-    if(firsthist) {
-      (*toyit)->Draw();
-      firsthist = false;
-    } else (*toyit)->Draw("SAME");
-  }
-  c1->Print("~/oxford-lhcb-wmass/plots/toys1Hist.png");
-  c1->Print("~/oxford-lhcb-wmass/plots/toys1Hist.pdf");
-  c1->Close();    
-       */
 
   // PERFORMING A CHI SQUARE TEST
 
@@ -280,11 +329,6 @@ int main(){
   cout << templates.front() << endl;
   //char scaledhname[300];
 
-    // Copy template hypothesis info onto an array of fixed size to hopefully be accepted by TGraph->DrawGraph()
-  
-  //Double_t Wmass_arr[ntemplates];
-  //cout << "Copying TemplateStruct->Wmasses to an array" << endl;
-  //copy((Wmasses).begin(), (Wmasses).end(), Wmass_arr);
   
   TGraph *chi2Plot = new TGraph(ntemplates);
   
@@ -307,7 +351,8 @@ int main(){
 
      for (templateit = templates.begin(); templateit != templates.end(); templateit++){
 
-       (*toyit)->Scale((*templateit)->Integral(30,50)/(*toyit)->Integral(30,50));
+       (*templateit)->Scale((*toyit)->Integral()/(*templateit)->Integral());
+
        sprintf(chi2plot_name, "chi2plot%s%u%u", Wcharge.c_str(), pTmethod, toyindex);
 
        //output->WriteTObject(*toyit, scaledhname, "Overwrite");
@@ -347,5 +392,4 @@ int main(){
   output->Close();
   return 0;
 }
-
 
