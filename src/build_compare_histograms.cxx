@@ -28,25 +28,227 @@
 #include "TRandom.h"
 #include <fstream>
 #include <ctime>
+#include <boost/property_tree/ptree.hpp>
+#include <boost/program_options.hpp>
+#include <TLorentzVector.h>
 
-using namespace std;
+
+///data/lhcb/users/mvesteri/GenLevelV19/merged/13TeV_Z_PowhegPythiaDefault.root
+
+Double_t GausSmear (Double_t value, Double_t adjparameter) {
+  value = value*gRandom->Gaus(1, adjparameter);
+  return value;
+}
+
+Double_t GausSmear_pTdependent (Double_t value, Double_t adjparameter) {
+  value = value*gRandom->Gaus(1, adjparameter*value);
+  return value;
+}
+
+ Double_t ConstFactor (Double_t value, Double_t adjparameter) {
+   value = value*adjparameter;
+   return value;
+ }
+
+ Double_t CurveOffset (Double_t value, Double_t adjparameter, Double_t echarge) {
+   value = echarge*(1/(echarge/value + adjparameter));
+   return value;
+ }
+
+
+//void Zanalysis (string pTparamfile="./pTparameters.csv", string rootfile="/data/lhcb/users/mvesteri/GenLevelV19/merged/13TeV_Z_PowhegPythiaDefault.root") {
+//void Zanalysis (vector< vector<Double_t>> pTparams, string rootfile="./13TeV_Z_PowhegPythiaDefault.root") {
+void Zanalysis (vector< vector<Double_t>> pTparams, string rootfile="/data/lhcb/users/mvesteri/GenLevelV19/merged/13TeV_Z_PowhegPythiaDefault.root") {
+
+  cout << "Zanalysis has been called" << endl;
+
+  TFile *input = TFile::Open(rootfile.c_str());
+  TFile *output = new TFile("./rootfiles/Zsampletest.root", "RECREATE"); 
+  TTree *MCDecayTree;
+  input->GetObject("MCDecayTree", MCDecayTree);
+
+  cout << "# of Decay tree events: " << MCDecayTree->GetEntries() << endl;
+
+  int npTmethods = 4;
+  string pTmethods[4] = {"GausSmear", "GausSmear_pTdependent", "ConstFactor", "CurveOffset"};
+  //vector< vector<Double_t> > pTparams(npTmethdos);
+  int hist_dims[3] = {40,80,100};
+
+  vector< vector<TH1F *> > toys(npTmethods); 
+  TH1F *nominalH = new TH1F("Znominal", "Invariant mass of muons from Z decay", hist_dims[0], hist_dims[1], hist_dims[2]);
+  vector<TH1F *>::iterator toyit;
+  vector<Double_t>::iterator pTparamsit;
+
+  Double_t muMass = 0.1056583745;
+  Double_t echarge = 1.602176565e-19;
+
+  ////////////// PUT CSV READING CODE HERE /////////////////////
+  /*
+  ifstream input;
+  input.open(pTparamfile);
+
+  if (input.fail()) {
+    cerr << "Error in pT parameter file" <<endl;
+    exit(1)
+  } 
+  */ 
+  ///////// from here assume pT params is initialized for the time being ////////////////////////////////////////////
+  
+  char hist_name[100];
+  char hist_title[100];
+  unsigned int methodindex, toyindex;
+
+  cout << "size of pTparams: " << pTparams.size() << " size of pTparams row: " << pTparams[0].size() <<endl;
+  ////////////// LOOP TO INITIALIZE THE HISTOGRAMS /////////////////////////////////////
+  for (methodindex = 0; methodindex < npTmethods; ++methodindex) {
+    
+    for (toyindex = 0; toyindex < pTparams[methodindex].size(); ++toyindex) {
+      sprintf(hist_name, "%sZ%i", pTmethods[methodindex].c_str(), toyindex);
+      sprintf(hist_title, "%s: %f", pTmethods[methodindex].c_str(), pTparams[methodindex][toyindex]);
+       
+      cout << "Initializing histogram " << hist_name << endl;
+      TH1F *hpT_toy = new TH1F(hist_name, hist_title, hist_dims[0], hist_dims[1], hist_dims[2]);
+      cout << "error marker 1" << endl;
+      toys[methodindex].push_back(hpT_toy);
+      cout << "error marker 2" << endl;
+    }
+  }
+
+  cout << "exiting histogram initialization loop." << endl;
+  //////////// toys VECTOR SHOULD NOW BE FILLED WITH EMPTY HISTOGRAMS //////////////////
+
+  Float_t prop_M, mup_PT, mup_ETA, mup_PHI, mum_PT, mum_ETA, mum_PHI;
+  Float_t mup_PTadj, mum_PTadj;
+
+  MCDecayTree->SetBranchAddress("mup_PT", &mup_PT);
+  MCDecayTree->SetBranchAddress("mum_PT", &mum_PT);
+  MCDecayTree->SetBranchAddress("prop_M", &prop_M);
+  MCDecayTree->SetBranchAddress("mup_ETA", &mup_ETA);
+  MCDecayTree->SetBranchAddress("mup_PHI", &mup_PHI);
+  MCDecayTree->SetBranchAddress("mum_ETA", &mum_ETA);
+  MCDecayTree->SetBranchAddress("mum_PHI", &mum_PHI);
+
+  cout << "error marker 3" << endl;
+
+  MCDecayTree->SetBranchStatus("*", 0);
+  MCDecayTree->SetBranchStatus("mup_PT", 1);
+  MCDecayTree->SetBranchStatus("mum_PT", 1);
+  MCDecayTree->SetBranchStatus("mup_ETA", 1);
+  MCDecayTree->SetBranchStatus("mum_ETA", 1);
+  MCDecayTree->SetBranchStatus("mup_PHI", 1);
+  MCDecayTree->SetBranchStatus("mum_PHI", 1);
+
+  //MCDecayTree->SetBranchStatus("prop_M",1);
+
+  TLorentzVector mup, mum, musum;
+
+  int nentries = MCDecayTree->GetEntries();
+  int nbytes = 0;
+
+  for (int eventit=0; eventit < nentries; ++eventit) {
+    cout << "error marker 4" <<endl;
+    nbytes += MCDecayTree->GetEntry(eventit);
+
+    if (eventit%2 == 0){
+      
+      toyindex=0;
+      for ( auto pTparam0 : pTparams[0] ) {  // (pTparamsit = pTparams.begin(); pTparamsit != pTparams.end(); ++pTparamsit) {
+	//cout << "error marker 4" <<endl;
+	mup_PTadj = GausSmear(mup_PT, pTparam0);
+	mum_PTadj = GausSmear(mum_PT, pTparam0);
+
+	mup.SetPtEtaPhiM(mup_PTadj, mup_ETA, mup_PHI, muMass);
+	mum.SetPtEtaPhiM(mum_PTadj, mum_ETA, mum_PHI, muMass);
+
+	musum = mup + mum;
+
+	toys[0][toyindex]->Fill(musum.M());
+	++toyindex;
+      }
+      
+      if (npTmethods > 1) {
+	toyindex=0;
+	for ( auto pTparam1 : pTparams[1] ) {  // (pTparamsit = pTparams.begin(); pTparamsit != pTparams.end(); ++pTparamsit) {
+	    //cout << "error marker 4" <<endl;
+	  mup_PTadj = GausSmear_pTdependent(mup_PT, pTparam1);
+	  mum_PTadj = GausSmear_pTdependent(mum_PT, pTparam1);
+
+	  mup.SetPtEtaPhiM(mup_PTadj, mup_ETA, mup_PHI, muMass);
+	  mum.SetPtEtaPhiM(mum_PTadj, mum_ETA, mum_PHI, muMass);
+
+	  musum = mup + mum;
+
+	  toys[1][toyindex]->Fill(musum.M());
+	  ++toyindex;
+	}
+      }
+	
+      if (npTmethods > 2) {
+	toyindex=0;
+	for ( auto pTparam2 : pTparams[2] ) {
+	  mup_PTadj = ConstFactor(mup_PT, pTparam2);
+	  mum_PTadj = ConstFactor(mum_PT, pTparam2);
+
+	  mup.SetPtEtaPhiM(mup_PTadj, mup_ETA, mup_PHI, muMass);
+	  mum.SetPtEtaPhiM(mum_PTadj, mum_ETA, mum_PHI, muMass);
+
+	  musum = mup + mum;
+
+	  toys[2][toyindex]->Fill(musum.M());
+	  ++toyindex;
+	}
+      }
+	
+      if (npTmethods > 3) {
+	toyindex=0;
+	for ( auto pTparam3 : pTparams[3] ) {
+	  mup_PTadj = CurveOffset(mup_PT, pTparam3, echarge);
+	  mum_PTadj = CurveOffset(mum_PT, pTparam3, -echarge);
+
+	  mup.SetPtEtaPhiM(mup_PTadj, mup_ETA, mup_PHI, muMass);
+	  mum.SetPtEtaPhiM(mum_PTadj, mum_ETA, mum_PHI, muMass);
+
+	  musum = mup + mum;
+
+	  toys[3][toyindex]->Fill(musum.M());
+	  ++toyindex;
+	}
+      }
+
+    } else {
+      mup.SetPtEtaPhiM(mup_PT, mup_ETA, mup_PHI, muMass);
+      mum.SetPtEtaPhiM(mum_PT, mum_ETA, mum_PHI, muMass);
+
+      musum = mup + mum;
+      nominalH->Fill(musum.M());
+    }
+  }
+  cout << "Histograms should all be filled" << endl;
+
+  output->Write();
+  output->Close();
+}
 
  
 int main ( ) {
+
   int hist_dims[3] = {40,30,50};
 
-  int ndata_files = 20;
+  int ndata_files = 1;
   string Wcharge = "Wm";
   int npTmethods = 4;
 
+  
+
   int ntemplates = 11;
   int ntoys = 6;
-  Double_t Mnom = 80.4;
-  
+  double pTparam_limits[8] = {0.0, 0.025, 0.0, 0.001, 0.999, 1.0005, 0.0, 0.3e-23};
+
+  Double_t Mnom = 80.4;  
   Double_t gamma = 2.15553;
   Double_t echarge = 1.602176565e-19;
   
-  double pTparam_limits[8] = {0.0, 0.025, 0.0, 0.001, 0.999, 1.0005, 0.0, 0.3e-23};
+  
 
   vector<TH1F *> templates;
   vector< vector<TH1F *> > toys(npTmethods);
@@ -74,13 +276,11 @@ int main ( ) {
   //create output file  	
   TFile *output = new TFile(output_name.c_str(),"RECREATE");
 
-  
-
   stringstream sreweight;
   //snominal << fixed << setprecision(2) << Mnom;
   string template_name;
   string toy_name1 = "GausSmear";
- string toy_name2 = "GausSmear_pTdependent";
+  string toy_name2 = "GausSmear_pTdependent";
   string toy_name3 = "ConstFactor";
   string toy_name4 = "CurveOffset";
 
@@ -182,7 +382,7 @@ int main ( ) {
   string parameterfile = "./pTparameters/" + fileinfo + ".csv";
   ofstream pT_ofs (parameterfile, ofstream::out);
 
-  for (int vect_row = 0; vect_row < pTparams.size(); ++vect_row) {
+  for (unsigned int vect_row = 0; vect_row < pTparams.size(); ++vect_row) {
     for (vector<Double_t>::iterator data_it = pTparams[vect_row].begin(); data_it != pTparams[vect_row].end(); ++data_it) { 
       if (data_it == pTparams[vect_row].begin()) {
 	pT_ofs << *data_it; 
@@ -252,7 +452,7 @@ int main ( ) {
       toyindex=0;
       for ( auto pTparam0 : pTparams[0] ) {  // (pTparamsit = pTparams.begin(); pTparamsit != pTparams.end(); ++pTparamsit) {
 	//cout << "error marker 4" <<endl;
-	mu_PTadj = mu_PT*gRandom->Gaus(1, pTparam0);
+	mu_PTadj = GausSmear(mu_PT, pTparam0);
 	toys[0][toyindex]->Fill(mu_PTadj);
 	++toyindex;
       }
@@ -261,7 +461,7 @@ int main ( ) {
 	toyindex=0;
 	for ( auto pTparam1 : pTparams[1] ) {  // (pTparamsit = pTparams.begin(); pTparamsit != pTparams.end(); ++pTparamsit) {
 	    //cout << "error marker 4" <<endl;
-	  mu_PTadj = mu_PT*gRandom->Gaus(1, pTparam1*mu_PT);
+	  mu_PTadj = GausSmear_pTdependent(mu_PT, pTparam1);
 	  toys[1][toyindex]->Fill(mu_PTadj);
 	  ++toyindex;
 	}
@@ -270,7 +470,7 @@ int main ( ) {
       if (npTmethods > 2) {
 	toyindex=0;
 	for ( auto pTparam2 : pTparams[2] ) {
-	  mu_PTadj = mu_PT*pTparam2;
+	  mu_PTadj = ConstFactor(mu_PT, pTparam2);
 	  toys[2][toyindex]->Fill(mu_PTadj);
 	  ++toyindex;
 	}
@@ -280,7 +480,7 @@ int main ( ) {
 	toyindex=0;
 	for ( auto pTparam3 : pTparams[3] ) {
 	  
-	  mu_PTadj = echarge*(1/(echarge/mu_PT + pTparam3));
+	  mu_PTadj = CurveOffset(mu_PT, pTparam3, echarge);
 	  toys[3][toyindex]->Fill(mu_PTadj);
 	  ++toyindex;
 	}
@@ -390,6 +590,9 @@ int main ( ) {
   
   output->Write();
   output->Close();
+
+  Zanalysis(pTparams);
+
   return 0;
 }
 
