@@ -677,7 +677,9 @@ void Wsample_analysis () {
   Zanalysis(pTparams);
 }
 
+/*
 int main () {
   Wsample_analysis();
   return 0;
 }
+*/
