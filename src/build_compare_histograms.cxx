@@ -22,7 +22,6 @@
 #include "TF1.h"
 #include "TTreeFormula.h"
 #include "TSystem.h"
-#include "TH2F.h"
 #include <vector>
 #include "TemplateStruct.h"
 #include "TRandom.h"
@@ -31,11 +30,10 @@
 #include <boost/property_tree/ptree.hpp>
 #include <boost/program_options.hpp>
 #include <TLorentzVector.h>
-
+#include <cmath>
 
 ///data/lhcb/users/mvesteri/GenLevelV19/merged/13TeV_Z_PowhegPythiaDefault.root
 
-struct templatestruct {vector<TH1F *> templates; vector<TH1F *> toys; };
 
 Double_t GausSmear (Double_t value, Double_t adjparameter) {
   value = value*gRandom->Gaus(1, adjparameter);
@@ -71,15 +69,15 @@ string make_timestamp (){
 }
 
 /*
-templatestruct extract_template_histograms (string pTmethods[4], string rootfile) {
+//Doing this as a helper method probably won't work because histograms are out of scope and we won't have access to any of the histogram names in order to check which x section to use
 
-  templatestruct ts; 
-  npTmethods = pTmethods.size();
+Double_t Chi2Test_lumiscaling(TH1F templateH, TH1F toyH) {
 
-  string template_name = 
+  Double_t lhcb_luminosity = 6.0; //Predicted fb^-1 at the end of run 2
+  Double_t xs_Zmumu = 198000.0, xs_Wpmunu = 1093600.0, xs_Wmmunu = 818400;
+
 }
 */
-
 
 //void Zanalysis (vector< vector<Double_t>> pTparams, string rootfile="./13TeV_Z_PowhegPythiaDefault.root") {
 void Zanalysis (vector< vector<Double_t>> pTparams, string rootfile="/data/lhcb/users/mvesteri/GenLevelV19/merged/13TeV_Z_PowhegPythiaDefault.root") {
@@ -106,7 +104,9 @@ void Zanalysis (vector< vector<Double_t>> pTparams, string rootfile="/data/lhcb/
 
   Double_t muMass = 0.1056583745;
   Double_t echarge = 1.602176565e-19;
-  
+  Double_t lhcb_luminosity = 6.0; //Predicted fb^-1 at the end of run 2  
+  Double_t xs_Zmumu = 198000.0; // Units in fb
+
   char hist_name[100];
   char hist_title[100];
   unsigned int methodindex, toyindex;
@@ -161,6 +161,14 @@ void Zanalysis (vector< vector<Double_t>> pTparams, string rootfile="/data/lhcb/
   for (int eventit=0; eventit < nentries; ++eventit) {
     //cout << "error marker 4" <<endl;
     nbytes += MCDecayTree->GetEntry(eventit);
+    
+    if (mup_ETA*mum_ETA > 0) {
+      mup_ETA = abs(mup_ETA);
+      mum_ETA = abs(mum_ETA);
+      if ((mup_PT < 20) || (mum_PT < 20) || (mup_ETA < 2.0) || (mup_ETA > 4.5) || (mup_ETA < 2.0) || (mum_ETA > 4.5)) {
+	continue;
+      }
+    } else continue;
 
     if (eventit%2 == 0){
       
@@ -340,6 +348,9 @@ void Wsample_analysis () {
   Double_t gamma = 2.15553;
   Double_t echarge = 1.602176565e-19;
 
+  Double_t lhcb_luminosity = 6.0; //Predicted fb^-1 at the end of run 2
+  Double_t xs_Wp = 1093600.0, xs_Wm = 818400;
+
   TH1::SetDefaultSumw2();
   vector<TH1F *> templates;
   vector< vector<TH1F *> > toys(npTmethods);
@@ -483,13 +494,15 @@ void Wsample_analysis () {
   }
   
 //Declaration of leaves types
-  Float_t prop_M, mu_PT;
+  Float_t prop_M, mu_PT, mu_ETA;
   Float_t mu_PTadj;
   MCDecayTree->SetBranchAddress("mu_PT", &mu_PT);
+  MCDecayTree->SetBranchAddress("mu_ETA", &mu_ETA);
   MCDecayTree->SetBranchAddress("prop_M", &prop_M);
 
   MCDecayTree->SetBranchStatus("*", 0);
   MCDecayTree->SetBranchStatus("mu_PT", 1);
+  MCDecayTree->SetBranchStatus("mu_ETA", 1);
   MCDecayTree->SetBranchStatus("prop_M",1);
 
   Long64_t nentries = MCDecayTree->GetEntries();
@@ -503,25 +516,29 @@ void Wsample_analysis () {
     cout << "Compare does not recognize equality of Wm with Wcharge" << endl;
   }
 
-  TH1F *test1 = new TH1F("test1", "Fill without adjustment", hist_dims[0], hist_dims[1], hist_dims[2]);
-  TH1F *test2 = new TH1F("test2", "Fill without adjustment", hist_dims[0], hist_dims[1], hist_dims[2]);
-
   TH1F *propM = new TH1F("propM", "propM from simulation", 40, 75, 85);
   propM->GetXaxis()->SetTitle("Mass of W propagator");
   propM->GetYaxis()->SetTitle("Counts");
 
+  Double_t xs;
   if(Wcharge.compare("Wm") == 0) {   
     echarge = -echarge;
+    xs = xs_Wm;
+  } else {
+    xs = xs_Wp;
   }
 
   for (Long64_t eventit=0; eventit < nentries; eventit++) { //usually i< nentries*split_ratio for full data set
     nbytes += MCDecayTree->GetEntry(eventit);
+    
+    if ((mu_PT < 20) || (mu_ETA < 2.0) || (mu_ETA > 4.5)) {
+      continue;
+    }
+
     propM->Fill(prop_M);
 
     if (eventit%2 == 0){
       
-      test1->Fill(mu_PT);
-
       toyindex=0;
       for ( auto pTparam0 : pTparams[0] ) {  // (pTparamsit = pTparams.begin(); pTparamsit != pTparams.end(); ++pTparamsit) {
 	//cout << "error marker 4" <<endl;
@@ -563,8 +580,6 @@ void Wsample_analysis () {
       templateindex = 0;
       const auto denominator = TMath::BreitWigner(prop_M, MWnom, gamma); 
       
-      test2->Fill(mu_PT);
-
       for ( auto Wmass : Wmasses ){ //Wmassit = Wmasses.begin(); Wmassit != Wmasses.end(); ++Wmassit) {
 	  //cout << "error marker 5" <<endl;
 	templates[templateindex]->Fill(mu_PT, TMath::BreitWigner(prop_M, Wmass, gamma)/denominator);
@@ -604,9 +619,13 @@ void Wsample_analysis () {
   
   char chi2plot_name[50];
   //char legend_header[300];
-  Double_t chi2point;
+  Double_t chi2point=0;
   toyindex=0;
   templateindex=0;  
+
+  Double_t event_count_exp = lhcb_luminosity*xs*13/8;
+  cout << "EXPECTED EVENT COUNT IS: " << event_count_exp << endl;
+  int nbins; 
 
   TCanvas* c2 = new TCanvas("cchi2", "chi2 with different W mass hypotheses");
   
@@ -620,13 +639,25 @@ void Wsample_analysis () {
      }
 
      for (templateit = templates.begin(); templateit != templates.end(); templateit++){
-
-       (*templateit)->Scale((*toyit)->Integral()/(*templateit)->Integral());
-
+       //(*templateit)->Scale((*toyit)->Integral()/(*templateit)->Integral());
+       cout << "Scaling template integral " << (*templateit)->Integral() << " and toy " << (*toyit)->Integral() << " to expected count" << endl;
+       (*templateit)->Scale(event_count_exp / (*templateit)->Integral());
+       (*toyit)->Scale(event_count_exp / (*toyit)->Integral());
+       
+       nbins = (*templateit)->GetNbinsX();
+       
        sprintf(chi2plot_name, "chi2plot%s%u%u", Wcharge.c_str(), pTmethod, toyindex);
+       
+       for (int binit = 0; binit < nbins; ++binit) {
+	 Double_t template_bin = (*templateit)->GetBinContent(binit);
+	 Double_t template_error = (*templateit)->GetBinError(binit);
+	 Double_t toy_bin = (*toyit)->GetBinContent(binit);
+	 Double_t toy_error = sqrt(toy_bin);
 
-       //output->WriteTObject(*toyit, scaledhname, "Overwrite");
-       chi2point = (*toyit)->Chi2Test((*templateit), "Chi2 WW");
+	 chi2point += (pow(toy_bin-template_bin,2))/(pow(toy_error,2));
+       }
+
+       //chi2point = (*toyit)->Chi2Test((*templateit), "Chi2 WW");
 
        cout << "Copying chi2 result for toy " << toyindex << " and template " << templateindex << ": " << chi2point << endl;
        chi2Plot->SetPoint(templateindex,Wmasses[templateindex],chi2point);
