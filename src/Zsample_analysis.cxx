@@ -23,7 +23,7 @@ namespace po = boost::program_options;
 using namespace std;
 
 
-int main ( int argc, char* argv[]) {
+int main ( int argc, const char **argv) {
 
   string rootfile, pTparamfile;
   
@@ -31,17 +31,17 @@ int main ( int argc, char* argv[]) {
   desc.add_options()
     ("help", "produce help message")
     //("rootfile", po::value<string>(&rootfile)->default_value("/data/lhcb/users/mvesteri/GenLevelV19/merged/13TeV_Z_PowhegPythiaDefault.root"))
-    ("rootfile", po::value< vector<string> >())//&rootfile)->default_value("./rootfiles/Zsampletest.root"))
+    ("rootfile", po::value(&rootfile)->default_value("./rootfiles/Zsampletest.root"))
     //("pTparamfile", po::value<string>(&pTparamfile)->default_value("./pTparameters/pTparameters.csv"))
-    ("pTparamfile", po::value< vector<string> >())//&pTparamfile)->default_value("./pTparameters/pTparameters.csv"))
+    ("pTparamfile", po::value(&pTparamfile)->default_value("./pTparameters/pTparameters.csv"))
   ;
 
-  po::positional_options_description p;
-  p.add("rootfile", -2);
-  p.add("pTparamfile", -1);
+  //po::positional_options_description p;
+  //p.add("rootfile", -2);
+  //p.add("pTparamfile", -1);
 
   po::variables_map vm;
-  po::store(po::command_line_parser(argc, argv).options(desc).positional(p).run(), vm);
+  po::store(po::parse_command_line(argc, argv, desc), vm);
   po::notify(vm);
 
   

@@ -24,18 +24,19 @@
 #include "TSystem.h"
 #include "TH2F.h"
 #include <vector>
-#include "TemplateStruct.h"
 #include "TRandom.h"
 #include <fstream>
 #include <ctime>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/program_options.hpp>
 #include <TLorentzVector.h>
+#include "TGraph.h"
 
 
 ///data/lhcb/users/mvesteri/GenLevelV19/merged/13TeV_Z_PowhegPythiaDefault.root
+using namespace std;
 
-struct templatestruct {vector<TH1F *> templates; vector<TH1F *> toys; };
+//struct templatestruct {vector<TH1F *> templates; vector<TH1F *> toys; };
 
 Double_t GausSmear (Double_t value, Double_t adjparameter) {
   value = value*gRandom->Gaus(1, adjparameter);
@@ -70,6 +71,25 @@ string make_timestamp (){
   return tbuffer;
 }
 
+double set_luminosity_scaling(string output_file) {
+  double ilumi = 4.0; //unit inverse femtobarn
+  double xsections[] = {1093600, 818400, 198000};
+
+  if (output_file.find("Wp") != string::npos) {
+    return ilumi*xsections[0]*13/8;
+
+  } else if (output_file.find("Wm") != string::npos) { 
+    return ilumi*xsections[1]*13/8;
+
+  } else if (output_file.find("Z") != string::npos) {
+    return ilumi*xsection[1]*13/8;
+  
+  } else {
+    cout << "Cannot identify the type of decay";
+    return numeric_limits<double>::infinity();
+  }
+}
+
 /*
 templatestruct extract_template_histograms (string pTmethods[4], string rootfile) {
 
@@ -80,6 +100,10 @@ templatestruct extract_template_histograms (string pTmethods[4], string rootfile
 }
 */
 
+////////////////// Define a function which takes the name of a rootfile (?) and 
+
+
+//////////////////////////
 
 //void Zanalysis (vector< vector<Double_t>> pTparams, string rootfile="./13TeV_Z_PowhegPythiaDefault.root") {
 void Zanalysis (vector< vector<Double_t>> pTparams, string rootfile="/data/lhcb/users/mvesteri/GenLevelV19/merged/13TeV_Z_PowhegPythiaDefault.root") {
@@ -87,7 +111,8 @@ void Zanalysis (vector< vector<Double_t>> pTparams, string rootfile="/data/lhcb/
   cout << "Zanalysis has been called" << endl;
 
   TFile *input = TFile::Open(rootfile.c_str());
-  TFile *output = new TFile("./rootfiles/Zsampletest.root", "RECREATE"); 
+  string output_name = "./rootfiles/Zsampletest_lhcbcut.root";
+  TFile *output = new TFile(output_name, "RECREATE"); 
   TTree *MCDecayTree;
   input->GetObject("MCDecayTree", MCDecayTree);
 
@@ -161,6 +186,18 @@ void Zanalysis (vector< vector<Double_t>> pTparams, string rootfile="/data/lhcb/
   for (int eventit=0; eventit < nentries; ++eventit) {
     //cout << "error marker 4" <<endl;
     nbytes += MCDecayTree->GetEntry(eventit);
+    
+    if (mup_ETA*mup_ETA > 0) {
+      
+      mup_ETA = abs(mup_ETA);
+      mum_ETA = abs(mum_ETA);
+      //Go on to next event if: 1. muons are in opposite directions (checked above) 2. at least one muon has pT < 20 GeV  3. At least one muon is outside the forward range 
+      if ( (mup_PT < 20) || (mum_PT < 20) || (mup_ETA < 2.0) || (mup_ETA > 4.5) || (mum_ETA < 2.0) || (mum_ETA > 4.5) ) {
+	continue;
+      }
+
+    } else continue;
+
 
     if (eventit%2 == 0){
       
@@ -239,16 +276,13 @@ void Zanalysis (vector< vector<Double_t>> pTparams, string rootfile="/data/lhcb/
   cout << "Histograms should all be filled" << endl;
 
 
-  /*
-  TGraph *chi2Plot = new TGraph(ntemplates);
+  string chi2file = "./chi2results/Zsample_chi2_results.csv";
+  ofstream chi2_ofs(chi2file, ofstream::out);
   
-  char chi2plot_name[50];
-  //char legend_header[300];
   Double_t chi2point;
   toyindex=0;
-  templateindex=0;  
 
-  TCanvas* c2 = new TCanvas("cchi2", "chi2 with different W mass hypotheses");
+  double luminosity_scale = set_luminosity_scaling(output_name);
   
   for (int pTmethod = 0; pTmethod < npTmethods; ++pTmethod) {
     toyindex=0;
@@ -259,44 +293,21 @@ void Zanalysis (vector< vector<Double_t>> pTparams, string rootfile="/data/lhcb/
        cout << "Warning! Weights do not seem to be stored" << endl;
      }
 
-     for (templateit = templates.begin(); templateit != templates.end(); templateit++){
+     nominalH->Scale((*toyit)->Integral()/nominalH->Integral());
+     // Add luminosity scaling here ?
+     chi2point = (*toyit)->Chi2Test(nominalH, "Chi2 WW");
 
-       (*templateit)->Scale((*toyit)->Integral()/(*templateit)->Integral());
-
-       sprintf(chi2plot_name, "chi2plot%s%u%u", Wcharge.c_str(), pTmethod, toyindex);
-
-       //output->WriteTObject(*toyit, scaledhname, "Overwrite");
-       chi2point = (*toyit)->Chi2Test((*templateit), "Chi2 WW");
-
-       cout << "Copying chi2 result for toy " << toyindex << " and template " << templateindex << ": " << chi2point << endl;
-       chi2Plot->SetPoint(templateindex,Wmasses[templateindex],chi2point);
-
-       templateindex = (templateindex + 1) % templates.size();
+     if (toyindex == 0) {
+       chi2_ofs << chi2point; 
+     } else {
+       chi2_ofs << "," << chi2point;
      }
-
-     cout << "Drawing graph of toy " << toyindex << endl;
-     chi2Plot->SetMarkerColor(4);
-     chi2Plot->SetMarkerStyle(8);
-     chi2Plot->Draw("AP");
-
-     //auto *legend = new TLegend();
-     //sprintf(legend_header, "Chi2: Gaussian pT smearing %f against W mass hypotheses", pTparams[pTmethod][toyindex]);
-     //legend->SetHeader(legend_header, "C");
-     //legend->Draw();
-
-     cout << "Writing chi2 plot to root file." << endl;
-     output->WriteTObject(chi2Plot, chi2plot_name, "Overwrite");
-     cout << "Write successful" << endl;
-
-     cout << "Saving chi2 plot as an image." << endl;
-     c2->Print("./plots/chi2Plot.png");
-     c2->Clear();  
-
+     
      toyindex++;
-   }
+    }
+    chi2_ofs << endl;
   }
-  c2->Close();
-  */
+  chi2_ofs.close();
 
   output->Write();
   output->Close();
@@ -351,7 +362,7 @@ void Wsample_analysis () {
 
   string tbuffer = make_timestamp();
 
-  string fileinfo = Wcharge + "_" + to_string(ndata_files) + "ntuples_" + tbuffer;
+  string fileinfo = Wcharge + "_" + to_string(ndata_files) + "ntuples_lhcbcut_" + tbuffer;
   string output_name = "~/oxford-lhcb-wmass/rootfiles/" + fileinfo + ".root";
 
   //create output file  	
@@ -483,13 +494,15 @@ void Wsample_analysis () {
   }
   
 //Declaration of leaves types
-  Float_t prop_M, mu_PT;
+  Float_t prop_M, mu_PT, mu_ETA;
   Float_t mu_PTadj;
   MCDecayTree->SetBranchAddress("mu_PT", &mu_PT);
+  MCDecayTree->SetBranchAddress("mu_ETA", &mu_ETA);
   MCDecayTree->SetBranchAddress("prop_M", &prop_M);
 
   MCDecayTree->SetBranchStatus("*", 0);
   MCDecayTree->SetBranchStatus("mu_PT", 1);
+  MCDecayTree->SetBranchStatus("mu_ETA", 1);
   MCDecayTree->SetBranchStatus("prop_M",1);
 
   Long64_t nentries = MCDecayTree->GetEntries();
@@ -503,9 +516,6 @@ void Wsample_analysis () {
     cout << "Compare does not recognize equality of Wm with Wcharge" << endl;
   }
 
-  TH1F *test1 = new TH1F("test1", "Fill without adjustment", hist_dims[0], hist_dims[1], hist_dims[2]);
-  TH1F *test2 = new TH1F("test2", "Fill without adjustment", hist_dims[0], hist_dims[1], hist_dims[2]);
-
   TH1F *propM = new TH1F("propM", "propM from simulation", 40, 75, 85);
   propM->GetXaxis()->SetTitle("Mass of W propagator");
   propM->GetYaxis()->SetTitle("Counts");
@@ -516,12 +526,17 @@ void Wsample_analysis () {
 
   for (Long64_t eventit=0; eventit < nentries; eventit++) { //usually i< nentries*split_ratio for full data set
     nbytes += MCDecayTree->GetEntry(eventit);
+    mu_ETA = abs(mu_ETA); // Include backward muons just to improve statistics
+
+    // We want to simply skip to the next event if the following conditions are not met: mu_PT > 20 GeV, 2 < abs(mu_ETA) < 4.5
+    if ((mu_PT < 20) || (mu_ETA < 2.0) || (mu_ETA > 4.5)) { 
+      continue;
+    }
+
     propM->Fill(prop_M);
 
     if (eventit%2 == 0){
       
-      test1->Fill(mu_PT);
-
       toyindex=0;
       for ( auto pTparam0 : pTparams[0] ) {  // (pTparamsit = pTparams.begin(); pTparamsit != pTparams.end(); ++pTparamsit) {
 	//cout << "error marker 4" <<endl;
@@ -563,8 +578,6 @@ void Wsample_analysis () {
       templateindex = 0;
       const auto denominator = TMath::BreitWigner(prop_M, MWnom, gamma); 
       
-      test2->Fill(mu_PT);
-
       for ( auto Wmass : Wmasses ){ //Wmassit = Wmasses.begin(); Wmassit != Wmasses.end(); ++Wmassit) {
 	  //cout << "error marker 5" <<endl;
 	templates[templateindex]->Fill(mu_PT, TMath::BreitWigner(prop_M, Wmass, gamma)/denominator);
@@ -622,7 +635,7 @@ void Wsample_analysis () {
      for (templateit = templates.begin(); templateit != templates.end(); templateit++){
 
        (*templateit)->Scale((*toyit)->Integral()/(*templateit)->Integral());
-
+       // Add luminosity scaling here?
        sprintf(chi2plot_name, "chi2plot%s%u%u", Wcharge.c_str(), pTmethod, toyindex);
 
        //output->WriteTObject(*toyit, scaledhname, "Overwrite");
