@@ -154,7 +154,7 @@ for toyset in range (0,npTmethods):
         axW.set_title(r"$p \rightarrow x*p$")
     if toyset == 3:
         axW.set_title(r"$\frac{q}{p} \rightarrow \frac{q}{p} + x$")
-    fig.savefig('./plots/Wpredictionplots/' + Wcharge + 'predictions_pTmethod' + str(toyset) + '.pdf')
-    fig.savefig('./plots/Wpredictionplots/' + Wcharge + 'predictions_pTmethod' + str(toyset) + '.png')
+    fig.savefig('./plots/Wpredictionplots/' + Wcharge + 'predictions_pTmethod' + str(toyset) + '.pdf', bbox_inches='tight')
+    fig.savefig('./plots/Wpredictionplots/' + Wcharge + 'predictions_pTmethod' + str(toyset) + '.png', bbox_inches='tight')
 
     plt.close('all')

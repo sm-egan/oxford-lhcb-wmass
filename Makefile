@@ -23,6 +23,10 @@ bin/build_compare_histograms.exe: src/build_compare_histograms.cxx
 
 #bin/%.o: src/%.cxx src/%.h
 #	$(#CC) $< -o $#@ $(#ROOT) $(#LHAPDF) $(#CFLAGS)
+#bin/Zsample_analysis.exe: src/Zsample_analysis.cxx src/build_compare_histograms.cxx src/build_compare_histograms.h
+#	@mkdir -p tmp/
+#	@mkdir -p bin/
+#	$(#CC) $^ -o $@ -ldl -I./include/ $(#ROOT) $(#LHAPDF) $(#CFLAGS)
 
 clean:
 	rm -f bin/*.exe    

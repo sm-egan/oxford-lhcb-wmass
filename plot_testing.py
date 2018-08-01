@@ -3,7 +3,7 @@ import ROOT as R
 import csv
 from decimal import *
 import matplotlib.pyplot as plt
-
+import sys
 
 def hist_ratio_plot(rootfileo, nominalHstr, targetHstr, wHstr = "None"):
 
@@ -38,7 +38,7 @@ def hist_ratio_plot(rootfileo, nominalHstr, targetHstr, wHstr = "None"):
     if not wHstr == "None":
         print("THIRD HISTOGRAM GIVEN, INITIALIZING VARIABLES")
         WpredH = rootfileo.Get(wHstr)
-        WpredH.Scale(targetH.Integral(30,50)/WpredH.Integral(30,50))
+        WpredH.Scale(targetH.Integral()/WpredH.Integral())
         nbinsW = WpredH.GetNbinsX()
         countsW = []
 
@@ -50,11 +50,6 @@ def hist_ratio_plot(rootfileo, nominalHstr, targetHstr, wHstr = "None"):
         ratiosumW = 0
 
     
-    #nominalH.Scale(1/nominalH.Integral(30,50))
-    #targetH.Scale(1/targetH.Integral(30,50))
-
-    print(nominalH.Integral(30,50))
-    print(targetH.Integral(30,50))
     print("LOOPING OVER BINS")
 
     for bin in range (1, nbinsN + 1):
@@ -117,12 +112,13 @@ def hist_ratio_plot(rootfileo, nominalHstr, targetHstr, wHstr = "None"):
     ratioerrTN.append(0)
     ratioerrNN.append(0)
     '''
-
     ratioTN = np.array(ratioTN)
     ratioerrTN = np.array(ratioerrTN)
     #ratioerrNN = np.array(ratioerrNN)
 
-    histx = np.linspace(30,50,nbinsN, endpoint=True)
+    #xmin = nominalH.GetXaxis().GetXmin()
+    #xmax = nominalH.GetXaxis().GetXmin()
+    
     normline = [1 for i in range(nbinsN)]
     normline = np.array(normline)
 
@@ -130,7 +126,20 @@ def hist_ratio_plot(rootfileo, nominalHstr, targetHstr, wHstr = "None"):
 
     fig1, (axHist,axRatios) = plt.subplots(2, sharex=True, gridspec_kw = {'height_ratios':[5,3]})
     
-    axHist.step(histx, countsN, where='post', label='Nominal W mass (80.40 GeV)', c='k')
+    if nominalHstr.find('Z') > -1:
+        nominal_label = 'Nominal Z'
+        xmin = 80
+        xmax = 100
+        xlabel = 'Dimuon invariant mass (GeV)'
+    else:
+        nominal_label = 'Nominal W mass (80.40 GeV)'
+        xmin = 30
+        xmax = 50
+        xlabel = 'Muon pT (GeV)'
+
+    histx = np.linspace(xmin, xmax, nbinsN, endpoint=True)
+    axHist.step(histx, countsN, where='post', label=nominal_label, c='k')   
+    legendcol = 2
     
     if not wHstr == "None":
         print("ADDING NEAREST w TEMPLATE TO PLOT")
@@ -149,11 +158,11 @@ def hist_ratio_plot(rootfileo, nominalHstr, targetHstr, wHstr = "None"):
 
         template_label = 'Predicted W mass (' + wHstr[2:] + ' GeV)'
         axHist.step(histx, countsW, where='post', label = template_label, c='r')
-
+        legendcol = 3
 
     axHist.step(histx, countsT, where='post', label=targetHstr, c='b')
     
-    axHist.set_xlim(30,50)
+    axHist.set_xlim(xmin, xmax)
     #axHist.set_ylim(0,0.05)
     axHist.set_ylabel('Event Count')
 
@@ -162,13 +171,16 @@ def hist_ratio_plot(rootfileo, nominalHstr, targetHstr, wHstr = "None"):
     axRatios.fill_between(histx, ratioTN+ratioerrTN, ratioTN-ratioerrTN, step='post', alpha=0.5, linestyle='--', color='c')
     axRatios.step(histx, ratioTN, where='post', c='b')    
 
-    axRatios.set_xlabel('mu_PT')
+    axRatios.set_xlabel(xlabel)
     axRatios.set_ylabel('Target/Nominal')
-
-    axHist.legend()
+    
+    if nominalHstr.find('Z') > -1: 
+        axHist.legend(loc = 'upper center', bbox_to_anchor=(0., 1.02, 1., .102), ncol=legendcol, mode = 'expand', borderaxespad=0.)
+    else:
+        axHist.legend()
     plot_name = 'plots/hist_ratio_plots/hist_ratios_' + targetHstr
-    fig1.savefig(plot_name + '.pdf')
-    fig1.savefig(plot_name + '.png')
+    fig1.savefig(plot_name + '.pdf', bbox_inches='tight')
+    fig1.savefig(plot_name + '.png', bbox_inches='tight')
 
 #for bin in range (:
 #   bin = nominalH.GetBinContent(i)
@@ -177,7 +189,30 @@ def hist_ratio_plot(rootfileo, nominalHstr, targetHstr, wHstr = "None"):
 #print(bincounts[14]) 
     
 if __name__ == "__main__":
-    filename = "./rootfiles/build_compare_templatesWm.root"
+    
+    if len(sys.argv) > 1:
+        filename = sys.argv[1]
+    else:
+        filename = "./rootfiles/Zsampletest.root"
     input = R.TFile.Open(filename, "UPDATE")
+    
+    if filename.find('Z') > -1:
+        nominalH = 'Znominal'
+        prop = 'Z'
+    elif filename.find('Wm') > -1:
+        nominalH = 'Wm80.40'
+        prop = 'Wm'
+    else:
+        nominalH = 'Wp80.40'
+        prop = 'Wp'
 
-    hist_ratio_plot(input, "Wm80.40", "GausSmearWm3", "Wm80.50")
+    targetH = 'GausSmear' + prop + '0'
+    
+    if len(sys.argv) > 2:
+        targetH = sys.argv[2]
+
+    if len(sys.argv) > 3:
+        compareH = sys.argv[4]
+        hist_ratio_plot(input, nominalH, targetH, compareH)
+    else:
+        hist_ratio_plot(input, nominalH, targetH)
