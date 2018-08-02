@@ -5,6 +5,20 @@ from decimal import *
 import matplotlib.pyplot as plt
 import sys
 
+def simple_scatter(x, y, title='', xlabel='x', ylabel='y'):
+    fig, ax = plt.subplots(1);
+    ax.plot(x, y, 'bo')
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
+
+    if title == '':
+        title = 'untitledplot'
+
+    fig.savefig('plots/' + title + '.png')
+    fig.savefig('plots/' + title + '.pdf')
+
+
 def hist_ratio_plot(rootfileo, nominalHstr, targetHstr, wHstr = "None"):
 
     nominalH = rootfileo.Get(nominalHstr)

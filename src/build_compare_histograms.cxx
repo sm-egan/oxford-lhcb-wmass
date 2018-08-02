@@ -80,12 +80,13 @@ Double_t Chi2Test_lumiscaling(TH1F templateH, TH1F toyH) {
 */
 
 //void Zanalysis (vector< vector<Double_t>> pTparams, string rootfile="./13TeV_Z_PowhegPythiaDefault.root") {
+
 void Zanalysis (vector< vector<Double_t>> pTparams, string rootfile="/data/lhcb/users/mvesteri/GenLevelV19/merged/13TeV_Z_PowhegPythiaDefault.root") {
 
   cout << "Zanalysis has been called" << endl;
 
   TFile *input = TFile::Open(rootfile.c_str());
-  TFile *output = new TFile("./rootfiles/Zsampletest.root", "RECREATE"); 
+  TFile *output = new TFile("./rootfiles/Zsampletest_lhcbcuts.root", "RECREATE"); 
   TTree *MCDecayTree;
   input->GetObject("MCDecayTree", MCDecayTree);
 
@@ -98,7 +99,7 @@ void Zanalysis (vector< vector<Double_t>> pTparams, string rootfile="/data/lhcb/
 
   TH1::SetDefaultSumw2();
   vector< vector<TH1F *> > toys(npTmethods); 
-  TH1F *nominalH = new TH1F("Ztemplate", "Invariant mass of muons from Z decay", hist_dims[0], hist_dims[1], hist_dims[2]);
+  TH1F *nominalZ = new TH1F("Ztemplate", "Invariant mass of muons from Z decay", hist_dims[0], hist_dims[1], hist_dims[2]);
   vector<TH1F *>::iterator toyit;
   vector<Double_t>::iterator pTparamsit;
 
@@ -241,23 +242,34 @@ void Zanalysis (vector< vector<Double_t>> pTparams, string rootfile="/data/lhcb/
       mum.SetPtEtaPhiM(mum_PT, mum_ETA, mum_PHI, muMass);
 
       musum = mup + mum;
-      nominalH->Fill(musum.M());
+      nominalZ->Fill(musum.M());
     }
   }
   cout << "Histograms should all be filled" << endl;
 
 
-  /*
-  TGraph *chi2Plot = new TGraph(ntemplates);
-  
-  char chi2plot_name[50];
-  //char legend_header[300];
-  Double_t chi2point;
-  toyindex=0;
-  templateindex=0;  
+  string chi2file = "./chi2results/Zsampletest_lhcbcuts.csv";
+  ofstream chi2_ofs (chi2file, ofstream::out);
 
-  TCanvas* c2 = new TCanvas("cchi2", "chi2 with different W mass hypotheses");
+  /*    if (data_it == pTparams[vect_row].begin()) {
+	pT_ofs << *data_it; 
+      } else {
+	pT_ofs << ',' << *data_it; 
+      }
+    }
+    pT_ofs << endl;  
+  }
   
+  pT_ofs.close();
+  */
+  
+  Double_t chi2point=0;
+  
+  Double_t event_count_exp = lhcb_luminosity*xs_Zmumu;
+  Double_t template_count, toy_count;
+  cout << "EXPECTED EVENT COUNT IS: " << event_count_exp << endl;
+  int nbins; 
+
   for (int pTmethod = 0; pTmethod < npTmethods; ++pTmethod) {
     toyindex=0;
     for (toyit = toys[pTmethod].begin(); toyit != toys[pTmethod].end(); toyit++) {
@@ -267,44 +279,36 @@ void Zanalysis (vector< vector<Double_t>> pTparams, string rootfile="/data/lhcb/
        cout << "Warning! Weights do not seem to be stored" << endl;
      }
 
-     for (templateit = templates.begin(); templateit != templates.end(); templateit++){
+     template_count = nominalZ->Integral();
+     toy_count = (*toyit)->Integral();
+     cout << "Scaling template integral " << template_count << " and toy " << toy_count << " to expected count" << endl;
+     nominalZ->Scale(event_count_exp / template_count);
+     (*toyit)->Scale(event_count_exp / toy_count);
+       
+     nbins = nominalZ->GetNbinsX();
+       
+     for (int binit = 0; binit < nbins; ++binit) {
+       Double_t template_bin = nominalZ->GetBinContent(binit);
+       Double_t template_error = nominalZ->GetBinError(binit);
+       Double_t toy_bin = (*toyit)->GetBinContent(binit);
+       Double_t toy_error = sqrt(toy_bin);
+       (*toyit)->SetBinError(binit, toy_error);
 
-       (*templateit)->Scale((*toyit)->Integral()/(*templateit)->Integral());
-
-       sprintf(chi2plot_name, "chi2plot%s%u%u", Wcharge.c_str(), pTmethod, toyindex);
-
-       //output->WriteTObject(*toyit, scaledhname, "Overwrite");
-       chi2point = (*toyit)->Chi2Test((*templateit), "Chi2 WW");
-
-       cout << "Copying chi2 result for toy " << toyindex << " and template " << templateindex << ": " << chi2point << endl;
-       chi2Plot->SetPoint(templateindex,Wmasses[templateindex],chi2point);
-
-       templateindex = (templateindex + 1) % templates.size();
+       chi2point += (pow(toy_bin-template_bin,2))/(pow(toy_error,2) + pow(template_error, 2));
      }
 
-     cout << "Drawing graph of toy " << toyindex << endl;
-     chi2Plot->SetMarkerColor(4);
-     chi2Plot->SetMarkerStyle(8);
-     chi2Plot->Draw("AP");
+     chi2point = chi2point/(nbins-2);
 
-     //auto *legend = new TLegend();
-     //sprintf(legend_header, "Chi2: Gaussian pT smearing %f against W mass hypotheses", pTparams[pTmethod][toyindex]);
-     //legend->SetHeader(legend_header, "C");
-     //legend->Draw();
-
-     cout << "Writing chi2 plot to root file." << endl;
-     output->WriteTObject(chi2Plot, chi2plot_name, "Overwrite");
-     cout << "Write successful" << endl;
-
-     cout << "Saving chi2 plot as an image." << endl;
-     c2->Print("./plots/chi2Plot.png");
-     c2->Clear();  
-
-     toyindex++;
-   }
+     cout << "Adding Z toy " << toyindex << " result to csv: " << chi2point << endl;
+     if (toyindex == 0) {
+       chi2_ofs << chi2point;
+     } else {
+       chi2_ofs << ',' << chi2point;
+     }
+     ++toyindex;
+    }
+    chi2_ofs << endl;
   }
-  c2->Close();
-  */
 
   output->Write();
   output->Close();
@@ -335,7 +339,7 @@ void Wsample_analysis () {
 
   int hist_dims[3] = {40,30,50};
 
-  int ndata_files = 1;
+  int ndata_files = 20;
   string Wcharge = "Wm";
   string pTmethods[4] = {"GausSmear", "GausSmear_pTdependent", "ConstFactor", "CurveOffset"};
   int npTmethods = 4;
@@ -349,7 +353,7 @@ void Wsample_analysis () {
   Double_t echarge = 1.602176565e-19;
 
   Double_t lhcb_luminosity = 6.0; //Predicted fb^-1 at the end of run 2
-  Double_t xs_Wp = 1093600.0, xs_Wm = 818400;
+  Double_t xs_Wp = 1093600.0, xs_Wm = 818400; //quantities in fb
 
   TH1::SetDefaultSumw2();
   vector<TH1F *> templates;
@@ -362,7 +366,7 @@ void Wsample_analysis () {
 
   string tbuffer = make_timestamp();
 
-  string fileinfo = Wcharge + "_" + to_string(ndata_files) + "ntuples_" + tbuffer;
+  string fileinfo = Wcharge + "_" + to_string(ndata_files) + "ntuples_lhcbcuts_" + tbuffer;
   string output_name = "~/oxford-lhcb-wmass/rootfiles/" + fileinfo + ".root";
 
   //create output file  	
@@ -386,7 +390,7 @@ void Wsample_analysis () {
 
     TH1F *hweighted_template = new TH1F(template_name.c_str(), template_title.c_str(), hist_dims[0], hist_dims[1], hist_dims[2]);    
     templates.push_back(hweighted_template);
-    
+   
     //Resetting the stringstream
     Wreweightss.str(string());
     ++templateindex;
@@ -616,14 +620,17 @@ void Wsample_analysis () {
   cout << "All vectors and iterators initialized.  template_vect is of length " << templates.size() << ". toy_vect is of length " <<  toys.size() << ". Wmass_vect is of length " << Wmasses.size() << endl;
   
   TGraph *chi2Plot = new TGraph(ntemplates);
-  
-  char chi2plot_name[50];
+  //TGraph *chi2Plot2 = new TGraph(ntemplates);
+  //TGraph *chi2Plot3 = new TGraph(ntemplates);
+
+  char chi2plot_name3[5]; //chi2plot_name1[50], chi2plot_name2[50], chi2plot_name3[50];
   //char legend_header[300];
-  Double_t chi2point=0;
+  Double_t chi2point3=0; //chi2point1=0, chi2point2=0, chi2point3=0;
   toyindex=0;
   templateindex=0;  
 
   Double_t event_count_exp = lhcb_luminosity*xs*13/8;
+  Double_t template_count, toy_count;
   cout << "EXPECTED EVENT COUNT IS: " << event_count_exp << endl;
   int nbins; 
 
@@ -640,35 +647,62 @@ void Wsample_analysis () {
 
      for (templateit = templates.begin(); templateit != templates.end(); templateit++){
        //(*templateit)->Scale((*toyit)->Integral()/(*templateit)->Integral());
-       cout << "Scaling template integral " << (*templateit)->Integral() << " and toy " << (*toyit)->Integral() << " to expected count" << endl;
-       (*templateit)->Scale(event_count_exp / (*templateit)->Integral());
-       (*toyit)->Scale(event_count_exp / (*toyit)->Integral());
+       template_count = (*templateit)->Integral();
+       toy_count = (*toyit)->Integral();
+       cout << "Scaling template integral " << template_count << " and toy " << toy_count << " to expected count" << endl;
+       (*templateit)->Scale(event_count_exp / template_count);
+       (*toyit)->Scale(event_count_exp / toy_count);
        
        nbins = (*templateit)->GetNbinsX();
        
-       sprintf(chi2plot_name, "chi2plot%s%u%u", Wcharge.c_str(), pTmethod, toyindex);
+       sprintf(chi2plot_name3, "chi2plot%s%u%u", Wcharge.c_str(), pTmethod, toyindex);
+       //sprintf(chi2plot_name1, "chi2plot%s%u%u_fcn", Wcharge.c_str(), pTmethod, toyindex);
+       //sprintf(chi2plot_name2, "chi2plot%s%u%u_form1", Wcharge.c_str(), pTmethod, toyindex);
+       //sprintf(chi2plot_name3, "chi2plot%s%u%u_form2", Wcharge.c_str(), pTmethod, toyindex);
        
        for (int binit = 0; binit < nbins; ++binit) {
 	 Double_t template_bin = (*templateit)->GetBinContent(binit);
 	 Double_t template_error = (*templateit)->GetBinError(binit);
 	 Double_t toy_bin = (*toyit)->GetBinContent(binit);
 	 Double_t toy_error = sqrt(toy_bin);
+	 (*toyit)->SetBinError(binit, toy_error);
 
-	 chi2point += (pow(toy_bin-template_bin,2))/(pow(toy_error,2));
+	 //Double_t sigma = toy_error*toy_error + template_error*template_error;
+	 //Double_t delta = toy_count - template_count;
+	 //chi2point += delta * delta / sigma;
+	 //chi2point2 += (pow(toy_bin-template_bin,2))/(pow(toy_error,2));
+	 chi2point3 += (pow(toy_bin-template_bin,2))/(pow(toy_error,2) + pow(template_error, 2));
        }
 
-       //chi2point = (*toyit)->Chi2Test((*templateit), "Chi2 WW");
+       //chi2point1 = (*toyit)->Chi2Test((*templateit), "Chi2 WW");
+       //chi2point2 = chi2point2/(nbins-1);
+       chi2point3 = chi2point3/(nbins-1);
 
-       cout << "Copying chi2 result for toy " << toyindex << " and template " << templateindex << ": " << chi2point << endl;
-       chi2Plot->SetPoint(templateindex,Wmasses[templateindex],chi2point);
+       //cout << "Copying chi2 result 1 for toy " << toyindex << " and template " << templateindex << ": " << chi2point1 << endl;
+       //cout << "Copying chi2 result 2 for toy " << toyindex << " and template " << templateindex << ": " << chi2point2 << endl;
+       //cout << "Copying chi2 result 3 for toy " << toyindex << " and template " << templateindex << ": " << chi2point3 << endl;
+
+       chi2Plot->SetPoint(templateindex, Wmasses[templateindex], chi2point3);
+       //chi2Plot1->SetPoint(templateindex, Wmasses[templateindex],chi2point1);
+       //chi2Plot2->SetPoint(templateindex, Wmasses[templateindex],chi2point2);
+       //chi2Plot3->SetPoint(templateindex, Wmasses[templateindex],chi2point3);
 
        templateindex = (templateindex + 1) % templates.size();
      }
 
      cout << "Drawing graph of toy " << toyindex << endl;
      chi2Plot->SetMarkerColor(4);
+     //chi2Plot1->SetMarkerColor(4);
+     //chi2Plot2->SetMarkerColor(4);
+     //chi2Plot3->SetMarkerColor(4);
      chi2Plot->SetMarkerStyle(8);
+     //chi2Plot1->SetMarkerStyle(8);
+     //chi2Plot2->SetMarkerStyle(8);
+     //chi2Plot3->SetMarkerStyle(8);
      chi2Plot->Draw("AP");
+     //chi2Plot1->Draw("AP");
+     //chi2Plot2->Draw("AP");
+     //chi2Plot3->Draw("AP");
 
      //auto *legend = new TLegend();
      //sprintf(legend_header, "Chi2: Gaussian pT smearing %f against W mass hypotheses", pTparams[pTmethod][toyindex]);
@@ -676,11 +710,13 @@ void Wsample_analysis () {
      //legend->Draw();
 
      cout << "Writing chi2 plot to root file." << endl;
-     output->WriteTObject(chi2Plot, chi2plot_name, "Overwrite");
+     output->WriteTObject(chi2Plot, chi2plot_name3, "Overwrite");
+     //output->WriteTObject(chi2Plot2, chi2plot_name2, "Overwrite");
+     //output->WriteTObject(chi2Plot3, chi2plot_name3, "Overwrite");
      cout << "Write successful" << endl;
 
-     cout << "Saving chi2 plot as an image." << endl;
-     c2->Print("./plots/chi2Plot.png");
+     //cout << "Saving chi2 plot as an image." << endl;
+     //c2->Print("./plots/chi2Plot.png");
      c2->Clear();  
 
      toyindex++;

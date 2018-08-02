@@ -31,7 +31,8 @@ Wmass_pred = [[]*npTmethods]
 Wmass_err = [[]*npTmethods]
 chi2min_fit = [[]*npTmethods]
 
-nominalH_name = Wcharge + "80.40"
+nominalH_name = Wcharge + 'template6'
+print(nominalH_name)
 
 ### INITIALIZE THE FIT FUNCTION AND NAME THE PARAMETERS ACCORDINGLY ###
 quadfit = R.TF1("chi2_quadfit", "[0]+(1/([2]**2))*(x-[1])**2", 79.8, 80.8)
@@ -63,7 +64,7 @@ for toyset in range (0,npTmethods):
     for toyit in range (0, ntoys):    
         print('Now plotting toy' + str(toyit))
         
-        chi2Plot_name = "chi2plot" + Wcharge + str(toyset) + str(toyit)    
+        chi2Plot_name = "chi2plot" + Wcharge + str(toyset) + str(toyit) + "_form2"    
         targetH_name = pTmethods[toyset] + Wcharge + str(toyit)
         print("Loading graphs: " + chi2Plot_name + " and " + targetH_name)
         
@@ -71,16 +72,26 @@ for toyset in range (0,npTmethods):
         
         chi2Plot = input.Get(chi2Plot_name)
         chi2stats = chi2Plot.GetY()
+        Wmasses = chi2Plot.GetX()
     
+        for chi2stat in chi2stats:
+            print(chi2stat)
         p0_init = min(chi2stats)
         print("p0_init: " + str(p0_init))
-        p1_init = chi2Plot.GetX()[np.argmin(chi2stats)]
+        minchi2index = np.argmin(chi2stats)
+        p1_init = Wmasses[minchi2index]
         print("p1_init: " + str(p1_init))
-        p2_init = 0.01
+        
+        #Initialize the third fit parameter according to nearest neighbour
+        try:
+            p2_init = abs(Wmasses[minchi2index - 1]-p1_init)/np.sqrt(abs(chi2stats[minchi2index -1] - p0_init))
+        except:
+            p2_init = abs(Wmasses[minchi2index + 1]-p1_init)/np.sqrt(abs(chi2stats[minchi2index +1] - p0_init))
+        
+        print("p2_init: " + str(p2_init))
 
-        wH_name = Wcharge + "%.2f" % p1_init
+        wH_name = Wcharge + 'template' + str(np.argmin(chi2stats))
         print("ADDING HIST COMPARISON OF " + wH_name)
-        nominalH_name = Wcharge + "80.40"
         hist_ratio_plot(input, nominalH_name, targetH_name, wH_name)    
 
         quadfit.SetParameters(p0_init, p1_init, p2_init)
@@ -145,7 +156,11 @@ for toyset in range (0,npTmethods):
     xlabelstr = pTmethods[toyset] + ' parameter'
     axChi.set_xlabel(xlabelstr)
 
-    fig.suptitle(Wcharge + ' samples')
+    if Wcharge == 'Wm':
+        fig.suptitle(r'$W^-$ samples')
+    elif Wcharge == 'Wp':
+        fig.suptitle(r'$W^+$ samples')
+
     if toyset == 0:
         axW.set_title(r"$\frac{\sigma p}{p} \propto x$")
     if toyset == 1:
