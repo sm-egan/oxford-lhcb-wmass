@@ -1,0 +1,49 @@
+#!/usr/bin/env python
+import ast, os, sys
+from subprocess import call, check_output, STDOUT
+with open(os.devnull, 'w') as FNULL:
+  has_lbrun = (call(['which', 'lb-run'], shell = False, stdout = FNULL,
+    stderr = STDOUT) == 0)
+base_dir = os.path.dirname(os.path.realpath(__file__))
+command = sys.argv[1:]
+os.environ['PYTHONPATH'] += \
+    ':{base}/root_pandas:{base}/plotting:{base}/python'.format(base=base_dir)
+if 'LD_LIBRARY_PATH' in os.environ:
+  libs = [ os.environ['LD_LIBRARY_PATH'] ]
+else:
+  libs = [ ]
+libs.append('{base}/cudnn5/cuda/lib64'.format(base=base_dir))
+os.environ['LD_LIBRARY_PATH'] = ':'.join(libs)
+os.environ['TEXINPUTS'] = '.:{base}/texpackages//:'.format(base=base_dir)
+
+if has_lbrun:
+  lcg_version = 'LCG/88'
+  env_changes = check_output(['lb-run', '--ext', 'Boost','--py',lcg_version],
+      shell = False)
+  env_changes = ast.literal_eval(env_changes)
+  library_paths = env_changes['LD_LIBRARY_PATH'].split(':')
+  boost_paths = [ x for x in library_paths if 'boost' in x.lower() ]
+  assert len(boost_paths) == 1
+  boost_path = boost_paths[0]
+  boost_root = boost_path[:-4] if boost_path[-4:] == '/lib' else booth_path
+  boost_include = os.path.join(boost_root, 'include')
+  tmp_subdirs = os.listdir(boost_include)
+  assert len(tmp_subdirs) == 1
+  boost_include = os.path.join(boost_include, tmp_subdirs[0])
+
+  cc_cxx = check_output(['which', 'gcc', 'g++'], shell = False,
+      env = { 'PATH' : env_changes['PATH'] })
+  cc, cxx = cc_cxx.split()
+  os.environ['CC'] = cc
+  os.environ['CXX'] = cxx
+  os.environ['BOOST_ROOT'] = boost_root
+  os.environ['BOOST_INCLUDEDIR'] = boost_include
+  os.environ['BOOST_LIBRARYDIR'] = boost_path
+  externals = [ 'Boost', 'ROOT', 'png', 'root_numpy', 'pandas', 'matplotlib',
+      'prompt_toolkit', 'pickleshare', 'pathlib2', 'decorator', 'traitlets',
+      'ipython' ]
+  code = call(['lb-run'] + sum([ ['--ext', ext] for ext in externals], [ ])
+      + [ lcg_version ] + command, shell = False)
+else:
+  code = call(command, shell = False)
+sys.exit(code)
