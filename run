@@ -1,49 +1,141 @@
 #!/usr/bin/env python
-import ast, os, sys
+import ast, os, sys, json, argparse
 from subprocess import call, check_output, STDOUT
+parser = argparse.ArgumentParser(description = 'Set up a useful environment.', add_help = False)
+parser.add_argument('--lcg', type = str, default = 'LCG_92', help = 'Force a particular LCG version')
+parser.add_argument('--compiler', type = str, default = 'gcc', help = 'Force a particular compiler')
+args, command = parser.parse_known_args()
+
+if args.compiler == 'gcc':
+  compilers = [ 'gcc', 'g++' ]
+elif args.compiler == 'clang':
+  compilers = ['clang', 'clang++']
+else:
+  raise Exception("Unknown compiler: " + args.compiler)
+
 with open(os.devnull, 'w') as FNULL:
   has_lbrun = (call(['which', 'lb-run'], shell = False, stdout = FNULL,
     stderr = STDOUT) == 0)
-base_dir = os.path.dirname(os.path.realpath(__file__))
-command = sys.argv[1:]
-os.environ['PYTHONPATH'] += \
-    ':{base}/root_pandas:{base}/plotting:{base}/python'.format(base=base_dir)
+
+# HTCondor copies its executable, which for the toys is this script, so __file__ is somewhere on the worker node
+# In the toy envrionment we have $WMASS pointing at the checkout_<commit> build directory, and $ROOTWMASS pointing to
+# the working directory (where we submitted from). $WMASS is appropriate in this case.
+base_dir = os.environ.get('WMASS', os.path.dirname(os.path.realpath(__file__)))
+
+python_bits = os.environ['PYTHONPATH'].split(':') if 'PYTHONPATH' in os.environ else [ ]
+python_bits += [ base_dir + '/root_pandas', base_dir + '/plotting', base_dir + '/python', base_dir + '/iminuit/build/lib.linux-x86_64-2.7' ]
+os.environ['PYTHONPATH'] = ':'.join( python_bits )
 if 'LD_LIBRARY_PATH' in os.environ:
   libs = [ os.environ['LD_LIBRARY_PATH'] ]
 else:
   libs = [ ]
+libs.append('{base}/lib'.format(base = base_dir)) # important in case we move the build around after compiling it
 libs.append('{base}/cudnn5/cuda/lib64'.format(base=base_dir))
+#libs.append('/cvmfs/lhcb.cern.ch/lib/lcg/releases/MCGenerators/pythia8/230-e835e/x86_64-slc6-gcc62-opt/lib')
+#libs.append('/cvmfs/lhcb.cern.ch/lib/lcg/releases/MCGenerators/lhapdf/6.1.6.cxxstd-8ea68/x86_64-slc6-gcc62-opt/lib')
+#os.environ['LHAPDF_DIR'] = '/cvmfs/lhcb.cern.ch/lib/lcg/releases/MCGenerators/lhapdf/6.1.6.cxxstd-8ea68/x86_64-slc6-gcc62-opt'
+os.environ['PYTHIA8_DIR'] = '/cvmfs/lhcb.cern.ch/lib/lcg/releases/MCGenerators/pythia8/230-e835e/x86_64-slc6-gcc62-opt/'
+os.environ['PYTHIA8DATA'] = '/cvmfs/lhcb.cern.ch/lib/lcg/releases/MCGenerators/pythia8/230-e835e/x86_64-slc6-gcc62-opt/share/Pythia8/xmldoc/'
 os.environ['LD_LIBRARY_PATH'] = ':'.join(libs)
 os.environ['TEXINPUTS'] = '.:{base}/texpackages//:'.format(base=base_dir)
 
-if has_lbrun:
-  lcg_version = 'LCG/88'
-  env_changes = check_output(['lb-run', '--ext', 'Boost','--py',lcg_version],
-      shell = False)
-  env_changes = ast.literal_eval(env_changes)
-  library_paths = env_changes['LD_LIBRARY_PATH'].split(':')
-  boost_paths = [ x for x in library_paths if 'boost' in x.lower() ]
-  assert len(boost_paths) == 1
-  boost_path = boost_paths[0]
-  boost_root = boost_path[:-4] if boost_path[-4:] == '/lib' else booth_path
-  boost_include = os.path.join(boost_root, 'include')
-  tmp_subdirs = os.listdir(boost_include)
-  assert len(tmp_subdirs) == 1
-  boost_include = os.path.join(boost_include, tmp_subdirs[0])
 
-  cc_cxx = check_output(['which', 'gcc', 'g++'], shell = False,
-      env = { 'PATH' : env_changes['PATH'] })
-  cc, cxx = cc_cxx.split()
-  os.environ['CC'] = cc
-  os.environ['CXX'] = cxx
-  os.environ['BOOST_ROOT'] = boost_root
-  os.environ['BOOST_INCLUDEDIR'] = boost_include
-  os.environ['BOOST_LIBRARYDIR'] = boost_path
-  externals = [ 'Boost', 'ROOT', 'png', 'root_numpy', 'pandas', 'matplotlib',
-      'prompt_toolkit', 'pickleshare', 'pathlib2', 'decorator', 'traitlets',
-      'ipython' ]
-  code = call(['lb-run'] + sum([ ['--ext', ext] for ext in externals], [ ])
-      + [ lcg_version ] + command, shell = False)
+
+def get_env_changes( script ):
+  new_env = check_output('. ' + script + ' > /dev/null 2>&1; env --null', shell = True )
+  env_changes = { }
+  for row in new_env.split("\0"):
+    if len(row):
+      var, val = row.split('=', 1)
+      if os.environ.get( var, val ) != val:
+        env_changes[var] = val
+  return env_changes
+
+if has_lbrun:
+  cmt_config = os.environ['CMTCONFIG']
+  cache_file = os.path.join(base_dir, '.cache.' + cmt_config + '.' + args.compiler + '.LCG' + args.lcg.replace('/','_'))
+  try:
+    with open(cache_file, 'r') as ifile:
+      changes = json.load( ifile )
+  except:
+    lcg_prefix = '/cvmfs/sft.cern.ch/lcg/'
+    lcg_view_dir = lcg_prefix + 'views/' + args.lcg + '/'
+
+    possible_cmt_configs = [ x for x in os.listdir( lcg_view_dir ) if not x.startswith( '.' ) ]
+    changes = { }
+    if cmt_config not in possible_cmt_configs:
+      fallbacks = {
+          'x86_64-slc6-gcc49-opt' : 'x86_64-slc6-gcc62-opt' # default on lxplus is gcc49
+          }
+      if cmt_config in fallbacks:
+        new_cmt_config = fallbacks[cmt_config]
+        print cmt_config, '->', new_cmt_config
+        changes = get_env_changes( 'LbLogin.sh -c ' + new_cmt_config )
+        for key, val in changes.iteritems(): os.environ[key] = val
+        cmt_config = new_cmt_config
+
+    lcg_setup = lcg_view_dir + cmt_config + '/setup.sh'
+    changes.update( get_env_changes( lcg_setup ) )
+
+    # Setup some data packages -- not sure how to do this more nicely
+    # This first bit should be fine -- it's not versioned etc.
+    lhapdf_data_paths = [ lcg_prefix + 'external/lhapdfsets/current' ]
+
+    # This is a bit uglier, but I'm not sure how to do better...
+    lhapdf_data_paths.append( check_output( [ 'lhapdf-config', '--datadir' ], shell = False, env = changes ).strip() )
+    changes['LHAPDF_DATA_PATH'] = ":".join( lhapdf_data_paths )
+    
+    
+    # LCG view puts the valgrind binary in the $PATH, but it doesn't setup $VALGRIND_LIB
+    # This is needed for it to actually run
+    changes['VALGRIND_LIB'] = lcg_view_dir + cmt_config + '/lib/valgrind'
+
+    # Not sure where this convention came from, but apparently valgrind-python.supp should be here
+    changes['STDOPTS'] = lcg_view_dir + cmt_config + '/bin'
+
+    # This is useful for scripting...
+    changes['ROOTSYS'] = check_output( [ 'root-config', '--prefix' ], shell = False, env = changes ).strip()
+
+    if args.compiler == 'clang':
+      clang_setup = lcg_prefix + 'contrib/llvm/5.0.0binutils/x86_64-centos7-gcc62binutils-opt/setup.sh'
+      clang_changes = get_env_changes( clang_setup )
+      # Make sure these have priority
+      for key in [ 'PATH', 'LD_LIBRARY_PATH' ]:
+        new_bits = ':'.join( [ x for x in clang_changes[key].split(':') if x.startswith('/cvmfs/') ] )
+        changes[key] = new_bits + ':' + changes[key] if key in changes else new_bits
+      changes['CMAKEFLAGS'] = '-DLCG_SYSTEM=x86_64-centos7-gcc62 -DLCG_FORCE_COMPILER=clang-5.0'
+      changes['GCC_TOOLCHAIN'] = lcg_prefix + 'contrib/gcc/6.2.0binutils/x86_64-centos7/'
+      changes['COMPILER_PATH'] = lcg_prefix + 'contrib/gcc/6.2.0binutils/x86_64-centos7/'
+
+    # Get a newer ninja and cmake
+    changes['PATH'] = lcg_prefix + 'contrib/ninja/1.7.1/x86_64-slc6/:/cvmfs/lhcb.cern.ch/lib/contrib/CMake/3.11.0/Linux-x86_64/bin:' + changes['PATH']
+        
+    # cleanup
+    for key in ['PATH','LD_LIBRARY_PATH']:
+      new_list = [ ]
+      new_set = set()
+      for x in changes[key].split(':'):
+        if x not in new_set:
+          new_list.append(x)
+          new_set.add(x)
+      changes[key] = ':'.join(new_list)
+
+    cc_cxx = check_output(['which'] + compilers, shell = False, env = { 'PATH' : changes['PATH'] })
+    cc, cxx = cc_cxx.split()
+    changes['CC'] = cc
+    changes['CXX'] = cxx
+    for key in ['SHLVL', '_']:
+      if key in changes:
+        del changes[key]
+    with open(cache_file, 'w') as ofile:
+      json.dump(changes, ofile)
+  for key, val in changes.iteritems(): os.environ[key] = val
+  if len(command):
+    code = call( command, shell = False )
+  else:
+    from pprint import pprint
+    pprint( changes )
+    code = 0
 else:
   code = call(command, shell = False)
 sys.exit(code)
