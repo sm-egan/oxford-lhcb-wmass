@@ -97,6 +97,8 @@ void Zanalysis (vector< vector<Double_t>> pTparams, string rootfile="/data/lhcb/
   //vector< vector<Double_t> > pTparams(npTmethdos);
   int hist_dims[3] = {40,80,100};
 
+  bool use_all_events = true;
+
   TH1::SetDefaultSumw2();
   vector< vector<TH1F *> > toys(npTmethods); 
   TH1F *nominalZ = new TH1F("Ztemplate", "Invariant mass of muons from Z decay", hist_dims[0], hist_dims[1], hist_dims[2]);
@@ -105,7 +107,7 @@ void Zanalysis (vector< vector<Double_t>> pTparams, string rootfile="/data/lhcb/
 
   Double_t muMass = 0.1056583745;
   Double_t echarge = 1.602176565e-19;
-  Double_t lhcb_luminosity = 6.0; //Predicted fb^-1 at the end of run 2  
+  Double_t lhcb_luminosity = 1.0; //Predicted fb^-1 at the end of run 2  
   Double_t xs_Zmumu = 198000.0; // Units in fb
 
   char hist_name[100];
@@ -171,7 +173,7 @@ void Zanalysis (vector< vector<Double_t>> pTparams, string rootfile="/data/lhcb/
       }
     } else continue;
 
-    if (eventit%2 == 0){
+    if ((eventit%2 == 0) || use_all_events) {
       
       toyindex=0;
       for ( auto pTparam0 : pTparams[0] ) {  // (pTparamsit = pTparams.begin(); pTparamsit != pTparams.end(); ++pTparamsit) {
@@ -237,7 +239,9 @@ void Zanalysis (vector< vector<Double_t>> pTparams, string rootfile="/data/lhcb/
 	}
       }
 
-    } else {
+    } 
+
+    if ((eventit % 2 == 1) || use_all_events) {
       mup.SetPtEtaPhiM(mup_PT, mup_ETA, mup_PHI, muMass);
       mum.SetPtEtaPhiM(mum_PT, mum_ETA, mum_PHI, muMass);
 
@@ -291,6 +295,12 @@ void Zanalysis (vector< vector<Double_t>> pTparams, string rootfile="/data/lhcb/
        Double_t template_bin = nominalZ->GetBinContent(binit);
        Double_t template_error = nominalZ->GetBinError(binit);
        Double_t toy_bin = (*toyit)->GetBinContent(binit);
+       
+       if (use_all_events) {
+	 (*toyit)->SetBinContent(binit, gRandom->Poisson(toy_bin));
+	 toy_bin = (*toyit)->GetBinContent(binit);
+       }
+	 
        Double_t toy_error = sqrt(toy_bin);
        (*toyit)->SetBinError(binit, toy_error);
 
@@ -352,8 +362,9 @@ void Wsample_analysis () {
   Double_t gamma = 2.15553;
   Double_t echarge = 1.602176565e-19;
 
-  Double_t lhcb_luminosity = 6.0; //Predicted fb^-1 at the end of run 2
+  Double_t lhcb_luminosity = 1.0; //Predicted fb^-1 at the end of run 2
   Double_t xs_Wp = 1093600.0, xs_Wm = 818400; //quantities in fb
+  bool use_all_events = true;
 
   TH1::SetDefaultSumw2();
   vector<TH1F *> templates;
@@ -541,7 +552,9 @@ void Wsample_analysis () {
 
     propM->Fill(prop_M);
 
-    if (eventit%2 == 0){
+    //cout << "boolean for event " << eventit << "evaluates to " <<((eventit%2 == 0) || use_all_events) << endl;
+    //cout << "boolean for event " << eventit << "evaluates to " <<((eventit%2 == 1) || use_all_events) << endl;
+    if ((eventit%2 == 0) || use_all_events) {
       
       toyindex=0;
       for ( auto pTparam0 : pTparams[0] ) {  // (pTparamsit = pTparams.begin(); pTparamsit != pTparams.end(); ++pTparamsit) {
@@ -579,8 +592,9 @@ void Wsample_analysis () {
 	  ++toyindex;
 	}
       }
+    }  
 
-    } else {
+    if ((eventit % 2 == 1) || use_all_events) {
       templateindex = 0;
       const auto denominator = TMath::BreitWigner(prop_M, MWnom, gamma); 
       
@@ -664,6 +678,12 @@ void Wsample_analysis () {
 	 Double_t template_bin = (*templateit)->GetBinContent(binit);
 	 Double_t template_error = (*templateit)->GetBinError(binit);
 	 Double_t toy_bin = (*toyit)->GetBinContent(binit);
+	 
+	 if (use_all_events) {
+	   (*toyit)->SetBinContent(binit, gRandom->Poisson(toy_bin));
+	   toy_bin = (*toyit)->GetBinContent(binit);
+	 }
+
 	 Double_t toy_error = sqrt(toy_bin);
 	 (*toyit)->SetBinError(binit, toy_error);
 
