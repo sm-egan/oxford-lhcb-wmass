@@ -33,6 +33,9 @@
 #include <cmath>
 
 ///data/lhcb/users/mvesteri/GenLevelV19/merged/13TeV_Z_PowhegPythiaDefault.root
+using namespace std;
+
+namespace po = boost::program_options;
 
 
 Double_t GausSmear (Double_t value, Double_t adjparameter) {
@@ -81,12 +84,15 @@ Double_t Chi2Test_lumiscaling(TH1F templateH, TH1F toyH) {
 
 //void Zanalysis (vector< vector<Double_t>> pTparams, string rootfile="./13TeV_Z_PowhegPythiaDefault.root") {
 
-void Zanalysis (vector< vector<Double_t>> pTparams, string rootfile="/data/lhcb/users/mvesteri/GenLevelV19/merged/13TeV_Z_PowhegPythiaDefault.root") {
+void Zanalysis (vector< vector<Double_t>> pTparams, 
+		string output_name, //= "./rootfiles/Zsampletest_lhcbcuts.root", 
+		bool use_all_events,// = true,
+		string rootfile) { //="/data/lhcb/users/mvesteri/GenLevelV19/merged/13TeV_Z_PowhegPythiaDefault.root") {
 
   cout << "Zanalysis has been called" << endl;
 
   TFile *input = TFile::Open(rootfile.c_str());
-  TFile *output = new TFile("./rootfiles/Zsampletest_lhcbcuts.root", "RECREATE"); 
+  TFile *output = new TFile(output_name.c_str(), "RECREATE"); 
   TTree *MCDecayTree;
   input->GetObject("MCDecayTree", MCDecayTree);
 
@@ -97,7 +103,6 @@ void Zanalysis (vector< vector<Double_t>> pTparams, string rootfile="/data/lhcb/
   //vector< vector<Double_t> > pTparams(npTmethdos);
   int hist_dims[3] = {40,80,100};
 
-  bool use_all_events = true;
 
   TH1::SetDefaultSumw2();
   vector< vector<TH1F *> > toys(npTmethods); 
@@ -107,7 +112,7 @@ void Zanalysis (vector< vector<Double_t>> pTparams, string rootfile="/data/lhcb/
 
   Double_t muMass = 0.1056583745;
   Double_t echarge = 1.602176565e-19;
-  Double_t lhcb_luminosity = 1.0; //Predicted fb^-1 at the end of run 2  
+  Double_t lhcb_luminosity = 6.0; //Predicted fb^-1 at the end of run 2  
   Double_t xs_Zmumu = 198000.0; // Units in fb
 
   char hist_name[100];
@@ -242,6 +247,9 @@ void Zanalysis (vector< vector<Double_t>> pTparams, string rootfile="/data/lhcb/
     } 
 
     if ((eventit % 2 == 1) || use_all_events) {
+      //apply smear to template to better replicate experimental conditions
+      mup_PTadj = GausSmear(mup_PT, 0.01);
+      mum_PTadj = GausSmear(mum_PT, 0.01);
       mup.SetPtEtaPhiM(mup_PT, mup_ETA, mup_PHI, muMass);
       mum.SetPtEtaPhiM(mum_PT, mum_ETA, mum_PHI, muMass);
 
@@ -291,24 +299,26 @@ void Zanalysis (vector< vector<Double_t>> pTparams, string rootfile="/data/lhcb/
        
      nbins = nominalZ->GetNbinsX();
        
-     for (int binit = 0; binit < nbins; ++binit) {
-       Double_t template_bin = nominalZ->GetBinContent(binit);
-       Double_t template_error = nominalZ->GetBinError(binit);
-       Double_t toy_bin = (*toyit)->GetBinContent(binit);
-       
-       if (use_all_events) {
+     if (use_all_events) {
+        
+       for (int binit = 0; binit < nbins; ++binit) {
+	 Double_t template_bin = nominalZ->GetBinContent(binit);
+	 Double_t template_error = nominalZ->GetBinError(binit);
+	 Double_t toy_bin = (*toyit)->GetBinContent(binit);
+      
 	 (*toyit)->SetBinContent(binit, gRandom->Poisson(toy_bin));
 	 toy_bin = (*toyit)->GetBinContent(binit);
+
+	 Double_t toy_error = sqrt(toy_bin);
+	 (*toyit)->SetBinError(binit, toy_error);
+	 chi2point += (pow(toy_bin-template_bin,2))/(pow(toy_error,2) + pow(template_error, 2));
        }
-	 
-       Double_t toy_error = sqrt(toy_bin);
-       (*toyit)->SetBinError(binit, toy_error);
-
-       chi2point += (pow(toy_bin-template_bin,2))/(pow(toy_error,2) + pow(template_error, 2));
+       
+       chi2point = chi2point/(nbins-2);
+     } else {
+       chi2point = (*toyit)->Chi2Test(nominalZ, "Chi2 WW");
      }
-
-     chi2point = chi2point/(nbins-2);
-
+     
      cout << "Adding Z toy " << toyindex << " result to csv: " << chi2point << endl;
      if (toyindex == 0) {
        chi2_ofs << chi2point;
@@ -324,11 +334,12 @@ void Zanalysis (vector< vector<Double_t>> pTparams, string rootfile="/data/lhcb/
   output->Close();
 }
 
+/*
 void Zanalysis (string pTparamfile="./pTparameters.csv", string rootfile="/data/lhcb/users/mvesteri/GenLevelV19/merged/13TeV_Z_PowhegPythiaDefault.root") {
 
   vector < vector<Double_t>> pTparams;
   ////////////// PUT CSV READING CODE HERE /////////////////////
-  /*
+  
   ifstream input;
   input.open(pTparamfile);
 
@@ -336,7 +347,7 @@ void Zanalysis (string pTparamfile="./pTparameters.csv", string rootfile="/data/
     cerr << "Error in pT parameter file" <<endl;
     exit(1)
   } 
-  */ 
+   
   ///////// from here assume pT params is initialized for the time being ////////////////////////////////////////////
   if (pTparams.size() < 1) {
     return;
@@ -344,27 +355,31 @@ void Zanalysis (string pTparamfile="./pTparameters.csv", string rootfile="/data/
     Zanalysis(pTparams, rootfile);
   }
 }
+*/
  
-void Wsample_analysis () {
+void Wsample_analysis (int ndata_files = 1, string Wcharge = "Wm", 
+		       string Zoutput_name = "./rootfiles/Zsampletest_lhcbcuts.root",
+		       bool Zuse_all_events = false,
+		       string Zrootfile="/data/lhcb/users/mvesteri/GenLevelV19/merged/13TeV_Z_PowhegPythiaDefault.root") {
 
   int hist_dims[3] = {40,30,50};
 
-  int ndata_files = 20;
-  string Wcharge = "Wm";
+  //int ndata_files = 20;
+  //string Wcharge = "Wm";
   string pTmethods[4] = {"GausSmear", "GausSmear_pTdependent", "ConstFactor", "CurveOffset"};
   int npTmethods = 4;
 
   int ntemplates = 11;
   int ntoys = 6;
-  double pTparam_limits[8] = {0.0, 0.025, 0.0, 0.001, 0.999, 1.0005, 0.0, 0.3e-23};
+  double pTparam_limits[8] = {0.0, 0.025, 0.0, 0.001, 0.999, 1.0002, 0.0, 0.3e-23};
 
   Double_t MWnom = 80.4;  
   Double_t gamma = 2.15553;
   Double_t echarge = 1.602176565e-19;
 
-  Double_t lhcb_luminosity = 1.0; //Predicted fb^-1 at the end of run 2
+  Double_t lhcb_luminosity = 6.0; //Predicted fb^-1 at the end of run 2
   Double_t xs_Wp = 1093600.0, xs_Wm = 818400; //quantities in fb
-  bool use_all_events = true;
+  bool use_all_events = false;
 
   TH1::SetDefaultSumw2();
   vector<TH1F *> templates;
@@ -378,7 +393,7 @@ void Wsample_analysis () {
   string tbuffer = make_timestamp();
 
   string fileinfo = Wcharge + "_" + to_string(ndata_files) + "ntuples_lhcbcuts_" + tbuffer;
-  string output_name = "~/oxford-lhcb-wmass/rootfiles/" + fileinfo + ".root";
+  string output_name = "~/oxford-lhcb-wmass/rootfiles/" + Wcharge + "chi2_diagnostic.root";
 
   //create output file  	
   TFile *output = new TFile(output_name.c_str(),"RECREATE");
@@ -545,15 +560,14 @@ void Wsample_analysis () {
 
   for (Long64_t eventit=0; eventit < nentries; eventit++) { //usually i< nentries*split_ratio for full data set
     nbytes += MCDecayTree->GetEntry(eventit);
-    
+
+    // Find events which do not meet the LHCb acceptance range or minimu pT and skip them
     if ((mu_PT < 20) || (mu_ETA < 2.0) || (mu_ETA > 4.5)) {
       continue;
     }
 
     propM->Fill(prop_M);
 
-    //cout << "boolean for event " << eventit << "evaluates to " <<((eventit%2 == 0) || use_all_events) << endl;
-    //cout << "boolean for event " << eventit << "evaluates to " <<((eventit%2 == 1) || use_all_events) << endl;
     if ((eventit%2 == 0) || use_all_events) {
       
       toyindex=0;
@@ -637,9 +651,9 @@ void Wsample_analysis () {
   //TGraph *chi2Plot2 = new TGraph(ntemplates);
   //TGraph *chi2Plot3 = new TGraph(ntemplates);
 
-  char chi2plot_name3[5]; //chi2plot_name1[50], chi2plot_name2[50], chi2plot_name3[50];
+  char chi2plot_name[50]; //chi2plot_name1[50], chi2plot_name2[50], chi2plot_name3[50];
   //char legend_header[300];
-  Double_t chi2point3=0; //chi2point1=0, chi2point2=0, chi2point3=0;
+  Double_t chi2point=0; //chi2point1=0, chi2point2=0, chi2point3=0;
   toyindex=0;
   templateindex=0;  
 
@@ -664,73 +678,56 @@ void Wsample_analysis () {
        template_count = (*templateit)->Integral();
        toy_count = (*toyit)->Integral();
        cout << "Scaling template integral " << template_count << " and toy " << toy_count << " to expected count" << endl;
-       (*templateit)->Scale(event_count_exp / template_count);
-       (*toyit)->Scale(event_count_exp / toy_count);
+       //(*templateit)->Scale(3*event_count_exp / template_count);
+       //(*toyit)->Scale(10*event_count_exp / toy_count);
        
        nbins = (*templateit)->GetNbinsX();
        
-       sprintf(chi2plot_name3, "chi2plot%s%u%u", Wcharge.c_str(), pTmethod, toyindex);
-       //sprintf(chi2plot_name1, "chi2plot%s%u%u_fcn", Wcharge.c_str(), pTmethod, toyindex);
-       //sprintf(chi2plot_name2, "chi2plot%s%u%u_form1", Wcharge.c_str(), pTmethod, toyindex);
-       //sprintf(chi2plot_name3, "chi2plot%s%u%u_form2", Wcharge.c_str(), pTmethod, toyindex);
+       sprintf(chi2plot_name, "chi2plot%s%u%u", Wcharge.c_str(), pTmethod, toyindex);
        
-       for (int binit = 0; binit < nbins; ++binit) {
-	 Double_t template_bin = (*templateit)->GetBinContent(binit);
-	 Double_t template_error = (*templateit)->GetBinError(binit);
-	 Double_t toy_bin = (*toyit)->GetBinContent(binit);
+       // METHOD 1: Go bin by bin summing the squared difference of bins divided by the sum of errors squared
+       if (use_all_events) {
 	 
-	 if (use_all_events) {
+	 for (int binit = 0; binit < nbins; ++binit) {
+	   Double_t template_bin = (*templateit)->GetBinContent(binit);
+	   Double_t template_error = (*templateit)->GetBinError(binit);
+	   Double_t toy_bin = (*toyit)->GetBinContent(binit);
+	 
 	   (*toyit)->SetBinContent(binit, gRandom->Poisson(toy_bin));
 	   toy_bin = (*toyit)->GetBinContent(binit);
+
+	   Double_t toy_error = sqrt(toy_bin);
+	   (*toyit)->SetBinError(binit, toy_error);
+	   Double_t chi2num = pow(toy_bin - template_bin, 2);
+	   Double_t chi2denom = pow(toy_error, 2) + pow(template_error, 2);
+	   chi2point += chi2num/chi2denom;
+	   cout << "Bin " << binit << ": adding to chi2 sum  " << chi2num << "/" << chi2denom << endl;
+	   cout << "Unreduced chi2 statistic: " << chi2point << endl;
 	 }
+	 chi2point = chi2point/(nbins-2);
 
-	 Double_t toy_error = sqrt(toy_bin);
-	 (*toyit)->SetBinError(binit, toy_error);
-
-	 //Double_t sigma = toy_error*toy_error + template_error*template_error;
-	 //Double_t delta = toy_count - template_count;
-	 //chi2point += delta * delta / sigma;
-	 //chi2point2 += (pow(toy_bin-template_bin,2))/(pow(toy_error,2));
-	 chi2point3 += (pow(toy_bin-template_bin,2))/(pow(toy_error,2) + pow(template_error, 2));
+       } else {
+	 chi2point = (*toyit)->Chi2Test((*templateit), "Chi2 WW");
        }
-
+       // METHOD 2: apply root chi2 test function - returning chi2 test statistic (as opposed to p-value) for weighted comparison
        //chi2point1 = (*toyit)->Chi2Test((*templateit), "Chi2 WW");
-       //chi2point2 = chi2point2/(nbins-1);
-       chi2point3 = chi2point3/(nbins-1);
+       
+       cout << "Copying chi2 result 1 for toy " << toyindex << " and template " << templateindex << ": " << chi2point << endl;
 
-       //cout << "Copying chi2 result 1 for toy " << toyindex << " and template " << templateindex << ": " << chi2point1 << endl;
-       //cout << "Copying chi2 result 2 for toy " << toyindex << " and template " << templateindex << ": " << chi2point2 << endl;
-       //cout << "Copying chi2 result 3 for toy " << toyindex << " and template " << templateindex << ": " << chi2point3 << endl;
-
-       chi2Plot->SetPoint(templateindex, Wmasses[templateindex], chi2point3);
-       //chi2Plot1->SetPoint(templateindex, Wmasses[templateindex],chi2point1);
-       //chi2Plot2->SetPoint(templateindex, Wmasses[templateindex],chi2point2);
-       //chi2Plot3->SetPoint(templateindex, Wmasses[templateindex],chi2point3);
+       chi2Plot->SetPoint(templateindex, Wmasses[templateindex], chi2point);
 
        templateindex = (templateindex + 1) % templates.size();
      }
 
      cout << "Drawing graph of toy " << toyindex << endl;
      chi2Plot->SetMarkerColor(4);
-     //chi2Plot1->SetMarkerColor(4);
-     //chi2Plot2->SetMarkerColor(4);
-     //chi2Plot3->SetMarkerColor(4);
+     
      chi2Plot->SetMarkerStyle(8);
-     //chi2Plot1->SetMarkerStyle(8);
-     //chi2Plot2->SetMarkerStyle(8);
-     //chi2Plot3->SetMarkerStyle(8);
+     
      chi2Plot->Draw("AP");
-     //chi2Plot1->Draw("AP");
-     //chi2Plot2->Draw("AP");
-     //chi2Plot3->Draw("AP");
-
-     //auto *legend = new TLegend();
-     //sprintf(legend_header, "Chi2: Gaussian pT smearing %f against W mass hypotheses", pTparams[pTmethod][toyindex]);
-     //legend->SetHeader(legend_header, "C");
-     //legend->Draw();
-
+     
      cout << "Writing chi2 plot to root file." << endl;
-     output->WriteTObject(chi2Plot, chi2plot_name3, "Overwrite");
+     output->WriteTObject(chi2Plot, chi2plot_name, "Overwrite");
      //output->WriteTObject(chi2Plot2, chi2plot_name2, "Overwrite");
      //output->WriteTObject(chi2Plot3, chi2plot_name3, "Overwrite");
      cout << "Write successful" << endl;
@@ -748,10 +745,37 @@ void Wsample_analysis () {
   output->Write();
   output->Close();
 
-  Zanalysis(pTparams);
+  Zanalysis(pTparams, Zoutput_name, Zuse_all_events, Zrootfile);
 }
 
-int main () {
-  Wsample_analysis();
+int main (int argc, const char** argv) {
+  int ndata_files;
+  string Wcharge, Zoutput_name, Zrootfile;
+  bool Zuse_all_events;
+
+  po::options_description desc("Allowed options");
+  
+  desc.add_options()
+    ("help", "produce help message")
+    //("rootfile", po::value<string>(&rootfile)->default_value("/data/lhcb/users/mvesteri/GenLevelV19/merged/13TeV_Z_PowhegPythiaDefault.root"))
+    ("ndata_files", po::value(&ndata_files)->default_value(20))
+    //("pTparamfile", po::value<string>(&pTparamfile)->default_value("./pTparameters/pTparameters.csv"))
+    ("Wcharge", po::value(&Wcharge)->default_value("Wp"))
+    ("Zoutput_name", po::value(&Zoutput_name)->default_value("./rootfiles/Zsampletest_lhcbcuts.root"))
+    ("Zrootfile", po::value(&Zrootfile)->default_value("/data/lhcb/users/mvesteri/GenLevelV19/merged/13TeV_Z_PowhegPythiaDefault.root"))
+    ("Zuse_all_events", po::value(&Zuse_all_events)->default_value(false))
+  ;
+  /*
+  po::positional_options_description pod;
+  pod.add("ndata_files", -2);
+  pod.add("Wcharge", -1);
+  */
+
+  po::variables_map vm;
+  po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);
+  po::notify(vm);
+
+  
+  Wsample_analysis(ndata_files, Wcharge, Zoutput_name, Zuse_all_events, Zrootfile);
   return 0;
 }

@@ -170,7 +170,8 @@ def hist_ratio_plot(rootfileo, nominalHstr, targetHstr, wHstr = "None"):
         axRatios.fill_between(histx, ratioWN+ratioerrWN, ratioWN-ratioerrWN, step='post', alpha=0.5, linestyle='-.', color='m')
         axRatios.step(histx, ratioWN, where='post', c='r')
 
-        template_label = 'Predicted W mass (' + wHstr[2:] + ' GeV)'
+        pred_mass = (int(wHstr[-1]) - 6)*0.1 + 80.40
+        template_label = 'Predicted W mass (' +  str(pred_mass) + ' GeV)'
         axHist.step(histx, countsW, where='post', label = template_label, c='r')
         legendcol = 3
 

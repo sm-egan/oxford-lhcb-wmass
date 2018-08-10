@@ -10,6 +10,10 @@ from plot_testing import hist_ratio_plot
 
 #### MANUALLY SET THE DESIRED FILE AND NUMBER OF PT ADJUSTMENT METHODS HERE ###
 fileinfo = sys.argv[1]
+if len(sys.argv) > 2:
+    pTfile = sys.argv[2]
+else:
+    pTfile = fileinfo
 filename = './rootfiles/' + fileinfo + '.root'
 #pTmethods = ['GausSmear']
 pTmethods = ['GausSmear', 'GausSmear_pTdependent', 'ConstFactor', 'CurveOffset']
@@ -43,7 +47,7 @@ quadfit.SetParName(2,"WMassUncertainty")
 
 ### READ IN THE PT PARAMETERS FROM CSV FILE OUTPUT BY build_compare_histograms.exe ###
 firstrow = True
-parameterfile = './pTparameters/' + fileinfo + '.csv'  
+parameterfile = './pTparameters/' + pTfile + '.csv'  
 with open(parameterfile) as csvfile:
     readCSV = csv.reader(csvfile, delimiter = ',', quoting=csv.QUOTE_NONNUMERIC)
     for row in readCSV:
@@ -64,7 +68,7 @@ for toyset in range (0,npTmethods):
     for toyit in range (0, ntoys):    
         print('Now plotting toy' + str(toyit))
         
-        chi2Plot_name = "chi2plot" + Wcharge + str(toyset) + str(toyit) + "_form2"    
+        chi2Plot_name = "chi2plot" + Wcharge + str(toyset) + str(toyit)    
         targetH_name = pTmethods[toyset] + Wcharge + str(toyit)
         print("Loading graphs: " + chi2Plot_name + " and " + targetH_name)
         
