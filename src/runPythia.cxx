@@ -77,7 +77,6 @@ int main( int argc, const char** argv )
   tree->Branch(lep2brname +"_ETA",&lep2_ETA,lep2brname +"_ETA/F");
   tree->Branch(lep2brname +"_PHI",&lep2_PHI,lep2brname +"_PHI/F");
   tree->Branch(lep2brname +"_ID",&lep2_ID,lep2brname +"_ID/I");
-  
     
   pythia.init();
   
@@ -87,17 +86,20 @@ int main( int argc, const char** argv )
     if (!pythia.next()) continue;
     //todo: sort the particles by pT.
     //i.e. pick the two highest pT muons in the event
+    // potential strategy: add another if statement to check if the current particle is of higher momentum than the one that was previously selected, repeat the procedure. if not, skip it
     for ( auto i = 0; i < (int)pythia.event.size(); ++i){
       Pythia8::Particle P(pythia.event[i]);
       if(pythia.event[i].isFinal()){
 	bool goodLep1 = P.id() == -13; // look specifically for antiparticle
 	bool goodLep2 = P.id() == 13; // look specifically for particle
-	if (goodLep1){
+	if ((goodLep1) && (P.pT() > lep1.Pt())) {
 	  lep1_ID = P.id();
 	  lep1.SetPxPyPzE(P.px(),P.py(),P.pz(),P.e());
-	}else if (goodLep2){
+	}else if ((goodLep2) && (P.pT() > lep2.Pt())){
 	  lep2_ID = P.id();
 	  lep2.SetPxPyPzE(P.px(),P.py(),P.pz(),P.e());
+	} else {
+	  //std::cout << "Particle " << i << " is less massive than previous goodLep - skip to next particle" << std::endl;
 	}
       }
     }

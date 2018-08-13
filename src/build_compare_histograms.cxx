@@ -84,36 +84,74 @@ Double_t Chi2Test_lumiscaling(TH1F templateH, TH1F toyH) {
 
 //void Zanalysis (vector< vector<Double_t>> pTparams, string rootfile="./13TeV_Z_PowhegPythiaDefault.root") {
 
-void Zanalysis (vector< vector<Double_t>> pTparams, 
-		string output_name, //= "./rootfiles/Zsampletest_lhcbcuts.root", 
-		bool use_all_events,// = true,
-		string rootfile) { //="/data/lhcb/users/mvesteri/GenLevelV19/merged/13TeV_Z_PowhegPythiaDefault.root") {
+void dimuon_analysis (vector< vector<Double_t>> pTparams, 
+		      //string output_name, //= "./rootfiles/Zsampletest_lhcbcuts.root", 
+		      bool use_all_events,// = true,
+		      string rootfile) { //="/data/lhcb/users/mvesteri/GenLevelV19/merged/13TeV_Z_PowhegPythiaDefault.root") {
 
-  cout << "Zanalysis has been called" << endl;
-
-  TFile *input = TFile::Open(rootfile.c_str());
-  TFile *output = new TFile(output_name.c_str(), "RECREATE"); 
-  TTree *MCDecayTree;
-  input->GetObject("MCDecayTree", MCDecayTree);
-
-  cout << "# of Decay tree events: " << MCDecayTree->GetEntries() << endl;
+  cout << "dimuon_analysis has been called" << endl;
 
   int npTmethods = 4;
   string pTmethods[4] = {"GausSmear", "GausSmear_pTdependent", "ConstFactor", "CurveOffset"};
   //vector< vector<Double_t> > pTparams(npTmethdos);
-  int hist_dims[3] = {40,80,100};
+  string propagator;
+  double hist_lims[2];
+  int nbins = 40; 
+  
+  double min_mupT;
+  
+  
+  if (rootfile.find("Z") != string::npos) { 
+    cout << "Z boson sample found" << endl; 
+    //bool isZ = true;
+    propagator = "Z";    
+    min_mupT = 20;
 
+    hist_lims[0] = 80;
+    hist_lims[1] = 100;
 
+  } else if (rootfile.find("upsilon") != string::npos) {
+    
+    cout << "Upsilon sample found" << endl;
+    //bool isUpsilon = true;
+    propagator = "Upsilon";
+    min_mupT = 0;
+    //int upsilondims[3] = {9,11,50};
+    //copy(upsilondims, upsilondims+3, hist_dims.begin());
+    //hist_dims = set_hist_dims(hist_dims, 9,11,25);
+    nbins = 100;
+    hist_lims[0] = 9;
+    hist_lims[1] = 10; 
+  } else {
+    int hist_dims[3] = {0,100,100};
+    cout << "WARNING: could not identify particle type by rootfile string" << endl;
+  }
+
+  char output_name[50];
+  sprintf(output_name, "./rootfiles/%ssample.root", propagator.c_str());
+  TFile *output = new TFile(output_name, "RECREATE"); 
+
+  TFile *input = TFile::Open(rootfile.c_str());
+  TTree *MCDecayTree;
+  input->GetObject("MCDecayTree", MCDecayTree);
+
+  cout << "# of Decay tree events: " << MCDecayTree->GetEntries() << endl;
+  
   TH1::SetDefaultSumw2();
-  vector< vector<TH1F *> > toys(npTmethods); 
-  TH1F *nominalZ = new TH1F("Ztemplate", "Invariant mass of muons from Z decay", hist_dims[0], hist_dims[1], hist_dims[2]);
+  char nominalH_name[50];
+  sprintf(nominalH_name, "%stemplate", propagator.c_str());
+  cout << "error marker 2" << endl;
+  TH1F *nominalH = new TH1F(nominalH_name, "Invariant mass of muons", nbins, hist_lims[0], hist_lims[1]);
+  cout << "error marker 3" << endl;
+
+  vector< vector<TH1F *> > toys(npTmethods);
   vector<TH1F *>::iterator toyit;
   vector<Double_t>::iterator pTparamsit;
 
   Double_t muMass = 0.1056583745;
   Double_t echarge = 1.602176565e-19;
-  Double_t lhcb_luminosity = 6.0; //Predicted fb^-1 at the end of run 2  
-  Double_t xs_Zmumu = 198000.0; // Units in fb
+  //Double_t lhcb_luminosity = 6.0; //Predicted fb^-1 at the end of run 2  
+  //Double_t xs_Zmumu = 198000.0; // Units in fb
 
   char hist_name[100];
   char hist_title[100];
@@ -124,11 +162,11 @@ void Zanalysis (vector< vector<Double_t>> pTparams,
   for (methodindex = 0; methodindex < npTmethods; ++methodindex) {
     
     for (toyindex = 0; toyindex < pTparams[methodindex].size(); ++toyindex) {
-      sprintf(hist_name, "%sZ%i", pTmethods[methodindex].c_str(), toyindex);
+      sprintf(hist_name, "%s%s%i", pTmethods[methodindex].c_str(), propagator.c_str(), toyindex);
       sprintf(hist_title, "%s: %f", pTmethods[methodindex].c_str(), pTparams[methodindex][toyindex]);
        
       cout << "Initializing histogram " << hist_name << endl;
-      TH1F *hpT_toy = new TH1F(hist_name, hist_title, hist_dims[0], hist_dims[1], hist_dims[2]);
+      TH1F *hpT_toy = new TH1F(hist_name, hist_title, nbins, hist_lims[0], hist_lims[1]);
       //cout << "error marker 1" << endl;
       toys[methodindex].push_back(hpT_toy);
       //cout << "error marker 2" << endl;
@@ -138,12 +176,12 @@ void Zanalysis (vector< vector<Double_t>> pTparams,
   cout << "exiting histogram initialization loop." << endl;
   //////////// toys VECTOR SHOULD NOW BE FILLED WITH EMPTY HISTOGRAMS //////////////////
 
-  Float_t prop_M, mup_PT, mup_ETA, mup_PHI, mum_PT, mum_ETA, mum_PHI;
+  Float_t mup_PT, mup_ETA, mup_PHI, mum_PT, mum_ETA, mum_PHI;
   Float_t mup_PTadj, mum_PTadj;
 
   MCDecayTree->SetBranchAddress("mup_PT", &mup_PT);
   MCDecayTree->SetBranchAddress("mum_PT", &mum_PT);
-  MCDecayTree->SetBranchAddress("prop_M", &prop_M);
+  //MCDecayTree->SetBranchAddress("prop_M", &prop_M);
   MCDecayTree->SetBranchAddress("mup_ETA", &mup_ETA);
   MCDecayTree->SetBranchAddress("mup_PHI", &mup_PHI);
   MCDecayTree->SetBranchAddress("mum_ETA", &mum_ETA);
@@ -173,7 +211,8 @@ void Zanalysis (vector< vector<Double_t>> pTparams,
     if (mup_ETA*mum_ETA > 0) {
       mup_ETA = abs(mup_ETA);
       mum_ETA = abs(mum_ETA);
-      if ((mup_PT < 20) || (mum_PT < 20) || (mup_ETA < 2.0) || (mup_ETA > 4.5) || (mup_ETA < 2.0) || (mum_ETA > 4.5)) {
+      // The mu pT cuts need to be adjusted for the upsilon set
+      if ((mup_PT < min_mupT) || (mum_PT < min_mupT) || (mup_ETA < 2.0) || (mup_ETA > 4.5) || (mup_ETA < 2.0) || (mum_ETA > 4.5)) {
 	continue;
       }
     } else continue;
@@ -254,13 +293,14 @@ void Zanalysis (vector< vector<Double_t>> pTparams,
       mum.SetPtEtaPhiM(mum_PT, mum_ETA, mum_PHI, muMass);
 
       musum = mup + mum;
-      nominalZ->Fill(musum.M());
+      cout << "Filling template histogram with invariant mass " << musum.M() <<endl;
+      nominalH->Fill(musum.M());
     }
   }
   cout << "Histograms should all be filled" << endl;
 
 
-  string chi2file = "./chi2results/Zsampletest_lhcbcuts.csv";
+  string chi2file = "./chi2results/" + propagator + "sampletest_lhcbcuts.csv";
   ofstream chi2_ofs (chi2file, ofstream::out);
 
   /*    if (data_it == pTparams[vect_row].begin()) {
@@ -277,10 +317,9 @@ void Zanalysis (vector< vector<Double_t>> pTparams,
   
   Double_t chi2point=0;
   
-  Double_t event_count_exp = lhcb_luminosity*xs_Zmumu;
+  //Double_t event_count_exp = lhcb_luminosity*xs_Zmumu;
   Double_t template_count, toy_count;
-  cout << "EXPECTED EVENT COUNT IS: " << event_count_exp << endl;
-  int nbins; 
+  //cout << "EXPECTED EVENT COUNT IS: " << event_count_exp << endl;
 
   for (int pTmethod = 0; pTmethod < npTmethods; ++pTmethod) {
     toyindex=0;
@@ -291,19 +330,19 @@ void Zanalysis (vector< vector<Double_t>> pTparams,
        cout << "Warning! Weights do not seem to be stored" << endl;
      }
 
-     template_count = nominalZ->Integral();
+     template_count = nominalH->Integral();
      toy_count = (*toyit)->Integral();
      cout << "Scaling template integral " << template_count << " and toy " << toy_count << " to expected count" << endl;
-     nominalZ->Scale(event_count_exp / template_count);
-     (*toyit)->Scale(event_count_exp / toy_count);
+     nominalH->Scale(toy_count / template_count);
+     //(*toyit)->Scale(event_count_exp / toy_count);
        
-     nbins = nominalZ->GetNbinsX();
+     nbins = nominalH->GetNbinsX();
        
      if (use_all_events) {
         
        for (int binit = 0; binit < nbins; ++binit) {
-	 Double_t template_bin = nominalZ->GetBinContent(binit);
-	 Double_t template_error = nominalZ->GetBinError(binit);
+	 Double_t template_bin = nominalH->GetBinContent(binit);
+	 Double_t template_error = nominalH->GetBinError(binit);
 	 Double_t toy_bin = (*toyit)->GetBinContent(binit);
       
 	 (*toyit)->SetBinContent(binit, gRandom->Poisson(toy_bin));
@@ -316,7 +355,7 @@ void Zanalysis (vector< vector<Double_t>> pTparams,
        
        chi2point = chi2point/(nbins-2);
      } else {
-       chi2point = (*toyit)->Chi2Test(nominalZ, "Chi2 WW");
+       chi2point = (*toyit)->Chi2Test(nominalH, "Chi2 WW");
      }
      
      cout << "Adding Z toy " << toyindex << " result to csv: " << chi2point << endl;
@@ -358,9 +397,9 @@ void Zanalysis (string pTparamfile="./pTparameters.csv", string rootfile="/data/
 */
  
 void Wsample_analysis (int ndata_files = 1, string Wcharge = "Wm", 
-		       string Zoutput_name = "./rootfiles/Zsampletest_lhcbcuts.root",
-		       bool Zuse_all_events = false,
-		       string Zrootfile="/data/lhcb/users/mvesteri/GenLevelV19/merged/13TeV_Z_PowhegPythiaDefault.root") {
+		       //string dimuoutput_name = "./rootfiles/Zsampletest_lhcbcuts.root",
+		       bool dimuuse_all_events = false,
+		       string dimurootfile="/data/lhcb/users/mvesteri/GenLevelV19/merged/13TeV_Z_PowhegPythiaDefault.root") {
 
   int hist_dims[3] = {40,30,50};
 
@@ -657,9 +696,9 @@ void Wsample_analysis (int ndata_files = 1, string Wcharge = "Wm",
   toyindex=0;
   templateindex=0;  
 
-  Double_t event_count_exp = lhcb_luminosity*xs*13/8;
+  //Double_t event_count_exp = lhcb_luminosity*xs*13/8;
   Double_t template_count, toy_count;
-  cout << "EXPECTED EVENT COUNT IS: " << event_count_exp << endl;
+  //cout << "EXPECTED EVENT COUNT IS: " << event_count_exp << endl;
   int nbins; 
 
   TCanvas* c2 = new TCanvas("cchi2", "chi2 with different W mass hypotheses");
@@ -745,13 +784,13 @@ void Wsample_analysis (int ndata_files = 1, string Wcharge = "Wm",
   output->Write();
   output->Close();
 
-  Zanalysis(pTparams, Zoutput_name, Zuse_all_events, Zrootfile);
+  dimuon_analysis(pTparams, dimuuse_all_events, dimurootfile);
 }
 
 int main (int argc, const char** argv) {
   int ndata_files;
-  string Wcharge, Zoutput_name, Zrootfile;
-  bool Zuse_all_events;
+  string Wcharge, dimurootfile;
+  bool dimuuse_all_events;
 
   po::options_description desc("Allowed options");
   
@@ -761,9 +800,9 @@ int main (int argc, const char** argv) {
     ("ndata_files", po::value(&ndata_files)->default_value(20))
     //("pTparamfile", po::value<string>(&pTparamfile)->default_value("./pTparameters/pTparameters.csv"))
     ("Wcharge", po::value(&Wcharge)->default_value("Wp"))
-    ("Zoutput_name", po::value(&Zoutput_name)->default_value("./rootfiles/Zsampletest_lhcbcuts.root"))
-    ("Zrootfile", po::value(&Zrootfile)->default_value("/data/lhcb/users/mvesteri/GenLevelV19/merged/13TeV_Z_PowhegPythiaDefault.root"))
-    ("Zuse_all_events", po::value(&Zuse_all_events)->default_value(false))
+    //("Zoutput_name", po::value(&Zoutput_name)->default_value("./rootfiles/Zsampletest_lhcbcuts.root"))
+    ("dimurootfile", po::value(&dimurootfile)->default_value("/data/lhcb/users/mvesteri/GenLevelV19/merged/13TeV_Z_PowhegPythiaDefault.root"))
+    ("dimuuse_all_events", po::value(&dimuuse_all_events)->default_value(false))
   ;
   /*
   po::positional_options_description pod;
@@ -774,8 +813,7 @@ int main (int argc, const char** argv) {
   po::variables_map vm;
   po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);
   po::notify(vm);
-
   
-  Wsample_analysis(ndata_files, Wcharge, Zoutput_name, Zuse_all_events, Zrootfile);
+  Wsample_analysis(ndata_files, Wcharge, dimuuse_all_events, dimurootfile);
   return 0;
 }
