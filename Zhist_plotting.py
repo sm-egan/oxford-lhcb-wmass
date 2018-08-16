@@ -18,12 +18,13 @@ if __name__ == "__main__":
         filename = './rootfiles/Zsampletest.root'
     input = R.TFile.Open(filename, 'UPDATE')
 
-    if len(sys.argv) > 2:
-        ntoys = sys.argv[2]
-    else:
-        ntoys = 6
+    ntoys = 6
 
-    chi2file = './chi2results/Zsampletest_lhcbcuts.csv'  
+    if len(sys.argv) > 2:
+        chi2file = sys.argv[2]
+    else:
+        chi2file = './chi2results/Zsampletest_lhcbcuts.csv'  
+
     firstrow = True
     chi2results = [[]]
     pTParams = [[]]
@@ -40,7 +41,17 @@ if __name__ == "__main__":
     len(pTParams)
 
     firstrow = True
-    parameterfile = './pTparameters/pTparameters.csv'  
+    if filename.find('Upsilon') > -1:
+        propagator = 'Upsilon'
+        nominalH_name = 'Upsilontemplate'
+    else:
+        propagator = 'Z'
+        nominalH_name = propagator + 'nominal'
+
+    if len(sys.argv) > 3:
+        parameterfile = sys.argv[3]
+    else:
+        parameterfile = './pTparameters/pTparameters.csv'  
     with open(parameterfile) as csvfile:
         readCSV = csv.reader(csvfile, delimiter = ',', quoting=csv.QUOTE_NONNUMERIC)
         for row in readCSV:
@@ -49,13 +60,13 @@ if __name__ == "__main__":
                 firstrow = False
             else:
                 pTParams.append(row)
-
     for method in range(0, npTmethods):        
-        plot_title = 'Zmumu_' + pTmethods[method] + 'chi2_vs_param'
+        plot_title = propagator + 'mumu_' + pTmethods[method] + 'chi2_vs_param'
         simple_scatter(pTParams[method], chi2results[method], plot_title, 'Adjustment parameter', '$\chi^2$ test statistic')
-        '''
+        
         for toyit in range (0, ntoys):
-            targetH_name = pTmethods[method] + 'Z' + str(toyit)
-            hist_ratio_plot(input, 'Znominal', targetH_name)
+            targetH_name = pTmethods[method] + propagator + str(toyit)
+            print('Attempting hist_ratio plot of ' + targetH_name + ' and ' +nominalH_name)
+            hist_ratio_plot(input, nominalH_name, targetH_name)
             plt.close('all')
-        '''
+        

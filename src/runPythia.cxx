@@ -25,7 +25,7 @@ int main( int argc, const char** argv )
     ("nEvents",po::value(&nEvents)->default_value(1000))
     ("seed",po::value(&seed)->default_value(1))
     ("eCM",po::value(&eCM)->default_value(13000.)) // COM enery 13 TeV
-    ("outputFile",po::value(&outputFile)->default_value("pythia_upsilon.root"))
+    ("outputFile",po::value(&outputFile)->default_value("/home/egan/oxford-lhcb-wmass/Ysamples/pythia_upsilon.root"))
     ;
 
   
@@ -45,7 +45,9 @@ int main( int argc, const char** argv )
   pythia.readString("Main:numberOfEvents = "+std::to_string(nEvents));
   pythia.readString("Beams:eCM = "+std::to_string(eCM));
   pythia.readString("Random:seed = "+std::to_string(seed));
-  pythia.readString("Bottomonium:all = on");//TODO: figure out how to switch on only Upsilon(1S)
+  pythia.readString("Bottomonium:all = off");//TODO: figure out how to switch on only Upsilon(1S)
+  pythia.readString("Bottomonium:gg2bbbar(3S1)[3S1(1)]g = on,off,off");
+  pythia.readString("553:onMode = off");
   pythia.readString("553:onIfAny = 13"); //only decays to muon for the Upsilon(1S) (MC particle ID = 553)
   pythia.readString("PartonLevel:MPI = off");
 
@@ -81,36 +83,68 @@ int main( int argc, const char** argv )
   pythia.init();
   
   TLorentzVector lep1,lep2;
+  std::map <double, Pythia8::Particle> mu_map;
+  std::map <double, Pythia8::Particle> antimu_map;
+  std::pair <std::map<double, Pythia8::Particle>::iterator,bool> inserted;
+
   for (int iEvent = 0; iEvent < nEvents; ++iEvent ) {
+    antimu_map.clear();
+    mu_map.clear();
+    //std::cout << "////////////////////// event number " << iEvent << " //////////////////////" << std::endl;
+    if (!pythia.next()) continue;    
     
-    if (!pythia.next()) continue;
-    //todo: sort the particles by pT.
-    //i.e. pick the two highest pT muons in the event
-    // potential strategy: add another if statement to check if the current particle is of higher momentum than the one that was previously selected, repeat the procedure. if not, skip it
     for ( auto i = 0; i < (int)pythia.event.size(); ++i){
       Pythia8::Particle P(pythia.event[i]);
-      if(pythia.event[i].isFinal()){
-	bool goodLep1 = P.id() == -13; // look specifically for antiparticle
-	bool goodLep2 = P.id() == 13; // look specifically for particle
-	if ((goodLep1) && (P.pT() > lep1.Pt())) {
-	  lep1_ID = P.id();
-	  lep1.SetPxPyPzE(P.px(),P.py(),P.pz(),P.e());
-	}else if ((goodLep2) && (P.pT() > lep2.Pt())){
-	  lep2_ID = P.id();
-	  lep2.SetPxPyPzE(P.px(),P.py(),P.pz(),P.e());
-	} else {
-	  //std::cout << "Particle " << i << " is less massive than previous goodLep - skip to next particle" << std::endl;
-	}
+      if(P.isFinal()){
+	bool goodLep1 = P.id() == -13; // look specifically for antimuon
+	bool goodLep2 = P.id() == 13; // look specifically for muon
+	if (goodLep1) {//&& (P.pT() > lep1.Pt())) {
+	  
+	  inserted = antimu_map.insert( std::pair<double, Pythia8::Particle>(P.pT(), P) );
+	  /*
+	  if (inserted.second == false) {
+	    std::cout << "Antimuon with identicle pT " << P.pT() << " was previously inserted in the map - keys are degenerate" << std::endl;
+	  } else {
+	    std::cout << "ADDING TO MAP ANTIMU WITH PT: " << P.pT() << std::endl;
+	    }*/
+	  
+	} else if (goodLep2){ //&& (P.pT() > lep2.Pt())){
+
+	  inserted = mu_map.insert( std::pair<double, Pythia8::Particle>(P.pT(), P) );
+	  /*
+	  if (inserted.second == false) {
+	    std::cout << "Muon with identicle pT " << P.pT() << " was previously inserted in the map - keys are degenerate" << std::endl;
+	  } else {
+	    std::cout << "ADDING TO MAP MU WITH PT: " << P.pT() << std::endl;
+	    } */
+	} 
       }
     }
-    lep1_PT = lep1.Pt();
-    lep1_ETA = lep1.Eta();
-    lep1_PHI = lep1.Phi();
-    lep2_PT = lep2.Pt();
-    lep2_ETA = lep2.Eta();
-    lep2_PHI = lep2.Phi();
+
+    if (antimu_map.empty() || mu_map.empty()) {
+      //std::cout << "Either muon or antimuon map is empty! Skip to next event" << std::endl;
+      continue;
+    } else {
+      Pythia8::Particle antimu = Pythia8::Particle((*antimu_map.rbegin()).second);
+      Pythia8::Particle mu = Pythia8::Particle((*mu_map.rbegin()).second);
+      //std::cout << "ADDING TO TREE ANTIMU WITH PT: " << antimu.pT() << std::endl;
+      //std::cout << "ADDING TO TREE MU WITH PT: " << mu.pT() << std::endl;
+      lep1.SetPxPyPzE(antimu.px(), antimu.py(), antimu.pz(), antimu.e());
+      lep2.SetPxPyPzE(mu.px(), mu.py(), mu.pz(), mu.e());
+      
+      lep1_PT = lep1.Pt();
+      lep1_ETA = lep1.Eta();
+      lep1_PHI = lep1.Phi();
+      lep2_PT = lep2.Pt();
+      lep2_ETA = lep2.Eta();
+      lep2_PHI = lep2.Phi();
     
-    tree->Fill();
+      TLorentzVector lepsum = lep1+lep2;
+      //std::cout << "INVARIANT MASS OF MUON SYSTEM IS: " << lepsum.M() << std::endl;
+      
+      tree->Fill();
+    }
+    
   } // End of event loop.
   
   output->Write();

@@ -18,6 +18,59 @@ def simple_scatter(x, y, title='', xlabel='x', ylabel='y'):
     fig.savefig('plots/' + title + '.png')
     fig.savefig('plots/' + title + '.pdf')
 
+def plot_root_hist (rootfileo, Hstr):
+    H = rootfileo.Get(Hstr)
+    nbins = H.GetNbinsX()
+    counts = []
+    errors = []
+
+    for bin in range (1, nbins+1):
+        bincount = H.GetBinContent(bin)
+        binerror = H.GetBinError(bin)
+
+        counts.append(bincount)
+        errors.append(binerror)
+
+    fig, ax = plt.subplots(1)
+    if Hstr.find('Z') > -1:
+        label = 'Nominal Z'
+        xmin = 80
+        xmax = 100
+        xlabel = 'Dimuon invariant mass (GeV)'
+    elif Hstr.find('Upsilon') > -1:
+        nominal_label = 'Nominal Upsilon'
+        xmin = 9.45601
+        xmax = 9.45605
+        xlabel = 'Dimuon invariant mass (GeV)'
+    else:
+        nominal_label = 'Nominal W mass (80.40 GeV)'
+        xmin = 30
+        xmax = 50
+        xlabel = 'Muon pT (GeV)'
+    
+
+    histx = np.linspace(xmin, xmax, nbins, endpoint=True)
+    ax.step(histx, counts, where='post', c='k')   
+    ax.errorbar(histx, counts, yerr=errors, fmt='none',capsize=3)
+    
+    ax.set_xlim(xmin, xmax)
+    #axHist.set_ylim(0,0.05)
+    ax.set_ylabel('Event Count')
+
+    #axRatios.fill_between(histx, normline+ratioerrNN, normline-ratioerrNN, step='post', alpha=0.5, linestyle='--', color='k')
+    ax.set_xlabel(xlabel)
+    ax.set_title(Hstr)
+    
+    '''
+    if nominalHstr.find('Z') > -1: 
+        axHist.legend(loc = 'upper center', bbox_to_anchor=(0., 1.02, 1., .102), ncol=legendcol, mode = 'expand', borderaxespad=0.)
+    else:
+        axHist.legend()
+    '''
+    plot_name = 'plots/pyplot_histograms/' + Hstr
+    fig.savefig(plot_name + '.pdf', bbox_inches='tight')
+    fig.savefig(plot_name + '.png', bbox_inches='tight')
+    
 
 def hist_ratio_plot(rootfileo, nominalHstr, targetHstr, wHstr = "None"):
 
@@ -86,14 +139,19 @@ def hist_ratio_plot(rootfileo, nominalHstr, targetHstr, wHstr = "None"):
     #print('after normalization: ' +  str(bincountnormed))
         countsT.append(bincountT)
         entrycountT += bincountT
-
-        countratioT = bincountT/bincountN
-        errorratioT = np.sqrt((binerrorT/bincountN)**2 + (bincountT*binerrorN/(bincountN**2))**2)
+        
+        if bincountN == 0 or bincountT == 0:
+            countratioT = 1
+            errorratioT = 0            
+        else:
+            countratioT = bincountT/bincountN
+            errorratioT = np.sqrt((binerrorT/bincountN)**2 + (bincountT*binerrorN/(bincountN**2))**2)
+        
         #print(errorratioT)
 
         ratioTN.append(countratioT)
         ratioerrTN.append(errorratioT)
-        ratiosumT += (bincountT - bincountN)/bincountN
+        #ratiosumT += (bincountT - bincountN)/bincountN
     
         if not wHstr == "None":
             bincountW = WpredH.GetBinContent(bin)
@@ -140,10 +198,16 @@ def hist_ratio_plot(rootfileo, nominalHstr, targetHstr, wHstr = "None"):
 
     fig1, (axHist,axRatios) = plt.subplots(2, sharex=True, gridspec_kw = {'height_ratios':[5,3]})
     
+    #You should find a way to get these numbers automatically
     if nominalHstr.find('Z') > -1:
         nominal_label = 'Nominal Z'
         xmin = 80
         xmax = 100
+        xlabel = 'Dimuon invariant mass (GeV)'
+    elif nominalHstr.find('Upsilon') > -1:
+        nominal_label = 'Nominal Upsilon'
+        xmin = 9.45601
+        xmax = 9.45605
         xlabel = 'Dimuon invariant mass (GeV)'
     else:
         nominal_label = 'Nominal W mass (80.40 GeV)'
@@ -222,12 +286,16 @@ if __name__ == "__main__":
         prop = 'Wp'
 
     targetH = 'GausSmear' + prop + '0'
-    
-    if len(sys.argv) > 2:
-        targetH = sys.argv[2]
 
-    if len(sys.argv) > 3:
+    if len(sys.argv) == 3:
+        H = sys.argv[2]
+        plot_root_hist(input, H)
+
+    elif len(sys.argv) == 4:
+        targetH = sys.argv[3]
+        hist_ratio_plot(input, nominalH, targetH)
+
+    elif len(sys.argv) > 4:
         compareH = sys.argv[4]
         hist_ratio_plot(input, nominalH, targetH, compareH)
-    else:
-        hist_ratio_plot(input, nominalH, targetH)
+    

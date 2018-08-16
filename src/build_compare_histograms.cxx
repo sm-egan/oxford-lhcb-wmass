@@ -49,7 +49,7 @@ Double_t GausSmear_pTdependent (Double_t value, Double_t adjparameter) {
 }
 
  Double_t ConstFactor (Double_t value, Double_t adjparameter) {
-   value = value*adjparameter;
+   value = value*(1+adjparameter);
    return value;
  }
 
@@ -71,6 +71,18 @@ string make_timestamp (){
   return tbuffer;
 }
 
+string trunc_double (double x, int precision, string format = "decimal") {
+  stringstream ss;
+  cout << "trunc_double input: " << x << endl;
+  if (format.compare("decimal") == 0) {
+    ss << fixed << setprecision(precision) << x;
+  } else if (format.compare("scientific") == 0) {
+    ss << scientific << setprecision(precision) << x;
+  }
+  string outstr = ss.str();
+  cout << "trunc_double stringstream: " << outstr << endl;
+  return outstr;
+}
 /*
 //Doing this as a helper method probably won't work because histograms are out of scope and we won't have access to any of the histogram names in order to check which x section to use
 
@@ -84,10 +96,20 @@ Double_t Chi2Test_lumiscaling(TH1F templateH, TH1F toyH) {
 
 //void Zanalysis (vector< vector<Double_t>> pTparams, string rootfile="./13TeV_Z_PowhegPythiaDefault.root") {
 
+vector<Double_t> scale_vector (vector<Double_t> to_scale, Double_t factor) {
+  for (vector<Double_t>::iterator scaleit = to_scale.begin(); scaleit != to_scale.end(); ++scaleit) {
+    cout << "Scaling value " << (*scaleit);
+    (*scaleit) *= factor;
+    cout << "to " << (*scaleit) << endl;
+  }
+  return to_scale;
+}
+
 void dimuon_analysis (vector< vector<Double_t>> pTparams, 
 		      //string output_name, //= "./rootfiles/Zsampletest_lhcbcuts.root", 
 		      bool use_all_events,// = true,
-		      string rootfile) { //="/data/lhcb/users/mvesteri/GenLevelV19/merged/13TeV_Z_PowhegPythiaDefault.root") {
+		      string rootfile,
+		      bool smear_template = false) { //="/data/lhcb/users/mvesteri/GenLevelV19/merged/13TeV_Z_PowhegPythiaDefault.root") {
 
   cout << "dimuon_analysis has been called" << endl;
 
@@ -99,7 +121,6 @@ void dimuon_analysis (vector< vector<Double_t>> pTparams,
   int nbins = 40; 
   
   double min_mupT;
-  
   
   if (rootfile.find("Z") != string::npos) { 
     cout << "Z boson sample found" << endl; 
@@ -120,23 +141,51 @@ void dimuon_analysis (vector< vector<Double_t>> pTparams,
     //copy(upsilondims, upsilondims+3, hist_dims.begin());
     //hist_dims = set_hist_dims(hist_dims, 9,11,25);
     nbins = 100;
-    hist_lims[0] = 9;
-    hist_lims[1] = 10; 
+    // set hist_lims[0] >= hist_lims[1] to get automatic determination of the limits
+    hist_lims[0] = 1;
+    hist_lims[1] = 0; 
+
+    // HACKY ADJUSTMENT TO PT PARAMS - SHOULD FIND A BETTER WAY
+    
+    //pTparams[0] = scale_vector(pTparams[0], 0.0001);
+    //pTparams[1] = scale_vector(pTparams[1], 0.0001);
+    pTparams[2] = scale_vector(pTparams[2], 0.001);
+    //pTparams[3] = scale_vector(pTparams[3], 0.001);
+    
+
+    string parameterfile = "./pTparameters/" + propagator + "sample.csv";
+    ofstream pT_ofs (parameterfile, ofstream::out);
+
+    for (unsigned int vect_row = 0; vect_row < pTparams.size(); ++vect_row) {
+      for (vector<Double_t>::iterator data_it = pTparams[vect_row].begin(); data_it != pTparams[vect_row].end(); ++data_it) { 
+	if (data_it == pTparams[vect_row].begin()) {
+	  pT_ofs << *data_it; 
+	} else {
+	  pT_ofs << ',' << *data_it; 
+	}
+      }
+      pT_ofs << endl;  
+    }
+  
+    pT_ofs.close();  
+  
   } else {
     int hist_dims[3] = {0,100,100};
     cout << "WARNING: could not identify particle type by rootfile string" << endl;
   }
 
-  char output_name[50];
-  sprintf(output_name, "./rootfiles/%ssample.root", propagator.c_str());
-  TFile *output = new TFile(output_name, "RECREATE"); 
-
+ 
   TFile *input = TFile::Open(rootfile.c_str());
   TTree *MCDecayTree;
   input->GetObject("MCDecayTree", MCDecayTree);
 
   cout << "# of Decay tree events: " << MCDecayTree->GetEntries() << endl;
-  
+ 
+  char output_name[50];
+  string tbuffer = make_timestamp();
+  sprintf(output_name, "./rootfiles/%ssample_lims%f-%f.root", propagator.c_str(), trunc_double(hist_lims[0], 3).c_str(), trunc_double(hist_lims[1], 3).c_str());
+  TFile *output = new TFile(output_name, "RECREATE"); 
+ 
   TH1::SetDefaultSumw2();
   char nominalH_name[50];
   sprintf(nominalH_name, "%stemplate", propagator.c_str());
@@ -170,6 +219,8 @@ void dimuon_analysis (vector< vector<Double_t>> pTparams,
       //cout << "error marker 1" << endl;
       toys[methodindex].push_back(hpT_toy);
       //cout << "error marker 2" << endl;
+      
+      // Add another histogram vector containing toys with mum_PT-mup_PT plotted
     }
   }
 
@@ -177,7 +228,7 @@ void dimuon_analysis (vector< vector<Double_t>> pTparams,
   //////////// toys VECTOR SHOULD NOW BE FILLED WITH EMPTY HISTOGRAMS //////////////////
 
   Float_t mup_PT, mup_ETA, mup_PHI, mum_PT, mum_ETA, mum_PHI;
-  Float_t mup_PTadj, mum_PTadj;
+  Float_t mup_PTadj, mum_PTadj, mup_PTsmear, mum_PTsmear;
 
   MCDecayTree->SetBranchAddress("mup_PT", &mup_PT);
   MCDecayTree->SetBranchAddress("mum_PT", &mum_PT);
@@ -200,14 +251,22 @@ void dimuon_analysis (vector< vector<Double_t>> pTparams,
   //MCDecayTree->SetBranchStatus("prop_M",1);
 
   TLorentzVector mup, mum, musum;
-
+  
   int nentries = MCDecayTree->GetEntries();
   int nbytes = 0;
 
   for (int eventit=0; eventit < nentries; ++eventit) {
     //cout << "error marker 4" <<endl;
     nbytes += MCDecayTree->GetEntry(eventit);
-    
+
+    if (smear_template) {
+      mup_PTsmear = GausSmear(mup_PT, 0.005);
+      mum_PTsmear = GausSmear(mum_PT, 0.005);
+    } else {
+      mup_PTsmear = mup_PT;
+      mum_PTsmear = mum_PT;
+    }
+    /*
     if (mup_ETA*mum_ETA > 0) {
       mup_ETA = abs(mup_ETA);
       mum_ETA = abs(mum_ETA);
@@ -216,6 +275,7 @@ void dimuon_analysis (vector< vector<Double_t>> pTparams,
 	continue;
       }
     } else continue;
+    */
 
     if ((eventit%2 == 0) || use_all_events) {
       
@@ -250,12 +310,13 @@ void dimuon_analysis (vector< vector<Double_t>> pTparams,
 	  ++toyindex;
 	}
       }
-	
+      
+
       if (npTmethods > 2) {
 	toyindex=0;
 	for ( auto pTparam2 : pTparams[2] ) {
-	  mup_PTadj = ConstFactor(mup_PT, pTparam2);
-	  mum_PTadj = ConstFactor(mum_PT, pTparam2);
+	  mup_PTadj = ConstFactor(mup_PTsmear, pTparam2);
+	  mum_PTadj = ConstFactor(mum_PTsmear, pTparam2);
 
 	  mup.SetPtEtaPhiM(mup_PTadj, mup_ETA, mup_PHI, muMass);
 	  mum.SetPtEtaPhiM(mum_PTadj, mum_ETA, mum_PHI, muMass);
@@ -270,8 +331,8 @@ void dimuon_analysis (vector< vector<Double_t>> pTparams,
       if (npTmethods > 3) {
 	toyindex=0;
 	for ( auto pTparam3 : pTparams[3] ) {
-	  mup_PTadj = CurveOffset(mup_PT, pTparam3, echarge);
-	  mum_PTadj = CurveOffset(mum_PT, pTparam3, -echarge);
+	  mup_PTadj = CurveOffset(mup_PTsmear, pTparam3, echarge);
+	  mum_PTadj = CurveOffset(mum_PTsmear, pTparam3, -echarge);
 
 	  mup.SetPtEtaPhiM(mup_PTadj, mup_ETA, mup_PHI, muMass);
 	  mum.SetPtEtaPhiM(mum_PTadj, mum_ETA, mum_PHI, muMass);
@@ -286,19 +347,25 @@ void dimuon_analysis (vector< vector<Double_t>> pTparams,
     } 
 
     if ((eventit % 2 == 1) || use_all_events) {
-      //apply smear to template to better replicate experimental conditions
-      mup_PTadj = GausSmear(mup_PT, 0.01);
-      mum_PTadj = GausSmear(mum_PT, 0.01);
-      mup.SetPtEtaPhiM(mup_PT, mup_ETA, mup_PHI, muMass);
-      mum.SetPtEtaPhiM(mum_PT, mum_ETA, mum_PHI, muMass);
+      //apply smear to template to better replicate experimental conditions - if smear_template=false smear value will just be the original
+      mup.SetPtEtaPhiM(mup_PTsmear, mup_ETA, mup_PHI, muMass);
+      mum.SetPtEtaPhiM(mum_PTsmear, mum_ETA, mum_PHI, muMass);
 
       musum = mup + mum;
-      cout << "Filling template histogram with invariant mass " << musum.M() <<endl;
+      //cout << "Filling template histogram with invariant mass " << musum.M() <<endl;
       nominalH->Fill(musum.M());
     }
   }
-  cout << "Histograms should all be filled" << endl;
+  cout << "Histograms should all be filled: printing information" << endl;
 
+  nominalH->Print("all");
+  /*
+  for (int methodit =0; methodit < npTmethods; ++methodit) {
+    for ( auto toyit : toys[methodit] ) {
+      (*toyit).Print("all");
+    }
+  }
+  */
 
   string chi2file = "./chi2results/" + propagator + "sampletest_lhcbcuts.csv";
   ofstream chi2_ofs (chi2file, ofstream::out);
@@ -341,8 +408,8 @@ void dimuon_analysis (vector< vector<Double_t>> pTparams,
      if (use_all_events) {
         
        for (int binit = 0; binit < nbins; ++binit) {
-	 Double_t template_bin = nominalH->GetBinContent(binit);
-	 Double_t template_error = nominalH->GetBinError(binit);
+	 //Double_t template_bin = nominalH->GetBinContent(binit);
+	 //Double_t template_error = nominalH->GetBinError(binit);
 	 Double_t toy_bin = (*toyit)->GetBinContent(binit);
       
 	 (*toyit)->SetBinContent(binit, gRandom->Poisson(toy_bin));
@@ -350,10 +417,10 @@ void dimuon_analysis (vector< vector<Double_t>> pTparams,
 
 	 Double_t toy_error = sqrt(toy_bin);
 	 (*toyit)->SetBinError(binit, toy_error);
-	 chi2point += (pow(toy_bin-template_bin,2))/(pow(toy_error,2) + pow(template_error, 2));
+	 //chi2point += (pow(toy_bin-template_bin,2))/(pow(toy_error,2) + pow(template_error, 2));
        }
        
-       chi2point = chi2point/(nbins-2);
+       chi2point = (*toyit)->Chi2Test(nominalH, "Chi2 WW");
      } else {
        chi2point = (*toyit)->Chi2Test(nominalH, "Chi2 WW");
      }
@@ -398,6 +465,7 @@ void Zanalysis (string pTparamfile="./pTparameters.csv", string rootfile="/data/
  
 void Wsample_analysis (int ndata_files = 1, string Wcharge = "Wm", 
 		       //string dimuoutput_name = "./rootfiles/Zsampletest_lhcbcuts.root",
+		       bool smear_template = false,
 		       bool dimuuse_all_events = false,
 		       string dimurootfile="/data/lhcb/users/mvesteri/GenLevelV19/merged/13TeV_Z_PowhegPythiaDefault.root") {
 
@@ -410,7 +478,7 @@ void Wsample_analysis (int ndata_files = 1, string Wcharge = "Wm",
 
   int ntemplates = 11;
   int ntoys = 6;
-  double pTparam_limits[8] = {0.0, 0.025, 0.0, 0.001, 0.999, 1.0002, 0.0, 0.3e-23};
+  double pTparam_limits[8] = {0.001, 0.01, 0.0001, 0.001, -0.001, 0.001, 0.0, 0.3e-23};
 
   Double_t MWnom = 80.4;  
   Double_t gamma = 2.15553;
@@ -437,8 +505,8 @@ void Wsample_analysis (int ndata_files = 1, string Wcharge = "Wm",
   //create output file  	
   TFile *output = new TFile(output_name.c_str(),"RECREATE");
 
-  stringstream Wnominalss, Wreweightss;
-  Wnominalss << fixed << setprecision(3) << MWnom;
+  string Wnominalstr;
+  Wnominalstr = trunc_double(MWnom, 3); 
   int toyindex=0, templateindex=0;
   string template_name;
   string template_title;
@@ -449,15 +517,15 @@ void Wsample_analysis (int ndata_files = 1, string Wcharge = "Wm",
   for (Double_t MWhyp=79.8; MWhyp<=80.8; MWhyp+=(80.8-79.8)/(ntemplates-1)) { //Mhyp for mass hypothesis
     Wmasses.push_back(MWhyp);  
 
-    Wreweightss << fixed <<setprecision(3) << MWhyp;
+    //Wreweightss << fixed <<setprecision(3) << MWhyp;
     template_name = Wcharge + "template" + to_string(templateindex);
-    template_title = "mu_PT with W mass reweight " + to_string(MWhyp) + " - nominal " + to_string(MWnom); 
+    template_title = "mu_PT with W mass reweight " + trunc_double(MWhyp, 3) + " - nominal " + Wnominalstr; 
 
     TH1F *hweighted_template = new TH1F(template_name.c_str(), template_title.c_str(), hist_dims[0], hist_dims[1], hist_dims[2]);    
     templates.push_back(hweighted_template);
    
     //Resetting the stringstream
-    Wreweightss.str(string());
+    //Wreweightss.str(string());
     ++templateindex;
   }
   templateindex = 0;
@@ -500,10 +568,9 @@ void Wsample_analysis (int ndata_files = 1, string Wcharge = "Wm",
     toyindex = 0;
     for (Double_t pTparam2 = pTparam_limits[4]; pTparam2 <= pTparam_limits[5]; pTparam2 += (pTparam_limits[5]-pTparam_limits[4])/(ntoys-1)) {
       pTparams[2].push_back(pTparam2);
-
-      //value << fixed << setprecision(4) << pTparam;
+            //value << fixed << setprecision(4) << pTparam;
       toy_name = pTmethods[2] + Wcharge + to_string(toyindex);
-      sprintf(toy_title, "mu_PT -> %f * mu_PT", pTparam2);
+      sprintf(toy_title, "mu_PT -> %f * mu_PT", 1+pTparam2);
       TH1F *hpT_toy = new TH1F(toy_name.c_str(), toy_title, hist_dims[0], hist_dims[1], hist_dims[2]);
       toys[2].push_back(hpT_toy);
 
@@ -518,14 +585,14 @@ void Wsample_analysis (int ndata_files = 1, string Wcharge = "Wm",
     for (Double_t pTparam3 = pTparam_limits[6]; pTparam3 <= pTparam_limits[7]; pTparam3 += (pTparam_limits[7]-pTparam_limits[6])/(ntoys-1)) {
       pTparams[3].push_back(pTparam3);
 
-      coffset_sn << scientific << setprecision(2) << pTparam3;
+      //coffset_sn << scientific << setprecision(2) << pTparam3;
 
       toy_name = pTmethods[3] + Wcharge + to_string(toyindex);
-      sprintf(toy_title, "charge/mu_PT -> charge/mu_PT + %s", coffset_sn.str().c_str());
+      sprintf(toy_title, "charge/mu_PT -> charge/mu_PT + %s", trunc_double(pTparam3, 2, "scientific").c_str());
       TH1F *hpT_toy = new TH1F(toy_name.c_str(), toy_title, hist_dims[0], hist_dims[1], hist_dims[2]);
       toys[3].push_back(hpT_toy);
 
-      coffset_sn.str(string());
+      //coffset_sn.str(string());
       ++toyindex;
     }
     cout << "error marker 6" << endl;
@@ -564,7 +631,7 @@ void Wsample_analysis (int ndata_files = 1, string Wcharge = "Wm",
   
 //Declaration of leaves types
   Float_t prop_M, mu_PT, mu_ETA;
-  Float_t mu_PTadj;
+  Float_t mu_PTadj, mu_PTsmear;
   MCDecayTree->SetBranchAddress("mu_PT", &mu_PT);
   MCDecayTree->SetBranchAddress("mu_ETA", &mu_ETA);
   MCDecayTree->SetBranchAddress("prop_M", &prop_M);
@@ -577,13 +644,6 @@ void Wsample_analysis (int ndata_files = 1, string Wcharge = "Wm",
   Long64_t nentries = MCDecayTree->GetEntries();
   cout << "nentries: " << nentries << endl;
   Long64_t nbytes = 0;
-
-  cout << "TESTING STRING COMPARE STATEMENT" << endl;
-  if (Wcharge.compare("Wm") == 0) {
-    cout << "The compare method correctly recognizes the Wcharge string as Wm" << endl;
-  } else {
-    cout << "Compare does not recognize equality of Wm with Wcharge" << endl;
-  }
 
   TH1F *propM = new TH1F("propM", "propM from simulation", 40, 75, 85);
   propM->GetXaxis()->SetTitle("Mass of W propagator");
@@ -600,6 +660,11 @@ void Wsample_analysis (int ndata_files = 1, string Wcharge = "Wm",
   for (Long64_t eventit=0; eventit < nentries; eventit++) { //usually i< nentries*split_ratio for full data set
     nbytes += MCDecayTree->GetEntry(eventit);
 
+    if (smear_template) {
+      mu_PTsmear = GausSmear(mu_PT, 0.005);
+    } else {
+      mu_PTsmear = mu_PT;
+    }
     // Find events which do not meet the LHCb acceptance range or minimu pT and skip them
     if ((mu_PT < 20) || (mu_ETA < 2.0) || (mu_ETA > 4.5)) {
       continue;
@@ -630,7 +695,7 @@ void Wsample_analysis (int ndata_files = 1, string Wcharge = "Wm",
       if (npTmethods > 2) {
 	toyindex=0;
 	for ( auto pTparam2 : pTparams[2] ) {
-	  mu_PTadj = ConstFactor(mu_PT, pTparam2);
+	  mu_PTadj = ConstFactor(mu_PTsmear, pTparam2);
 	  toys[2][toyindex]->Fill(mu_PTadj);
 	  ++toyindex;
 	}
@@ -639,8 +704,8 @@ void Wsample_analysis (int ndata_files = 1, string Wcharge = "Wm",
       if (npTmethods > 3) {
 	toyindex=0;
 	for ( auto pTparam3 : pTparams[3] ) {
-	  
-	  mu_PTadj = CurveOffset(mu_PT, pTparam3, echarge);
+	  mu_PTadj = GausSmear(mu_PT, 0.005);
+	  mu_PTadj = CurveOffset(mu_PTsmear, pTparam3, echarge);
 	  toys[3][toyindex]->Fill(mu_PTadj);
 	  ++toyindex;
 	}
@@ -650,10 +715,11 @@ void Wsample_analysis (int ndata_files = 1, string Wcharge = "Wm",
     if ((eventit % 2 == 1) || use_all_events) {
       templateindex = 0;
       const auto denominator = TMath::BreitWigner(prop_M, MWnom, gamma); 
-      
+      mu_PTadj = GausSmear(mu_PTsmear, 0.005);
+      //mu_PTadj = mu_PT;
       for ( auto Wmass : Wmasses ){ //Wmassit = Wmasses.begin(); Wmassit != Wmasses.end(); ++Wmassit) {
 	  //cout << "error marker 5" <<endl;
-	templates[templateindex]->Fill(mu_PT, TMath::BreitWigner(prop_M, Wmass, gamma)/denominator);
+	templates[templateindex]->Fill(mu_PTadj, TMath::BreitWigner(prop_M, Wmass, gamma)/denominator);
 	  //templateindex = (templateindex + 1) % templates.size();
 	++templateindex;
 	  //cout << "templateindex is currently: " << templateindex <<endl;
@@ -784,13 +850,13 @@ void Wsample_analysis (int ndata_files = 1, string Wcharge = "Wm",
   output->Write();
   output->Close();
 
-  dimuon_analysis(pTparams, dimuuse_all_events, dimurootfile);
+  dimuon_analysis(pTparams, dimuuse_all_events, dimurootfile, smear_template);
 }
 
 int main (int argc, const char** argv) {
   int ndata_files;
-  string Wcharge, dimurootfile;
-  bool dimuuse_all_events;
+  string Wcharge, Zrootfile, Yrootfile, dimu_propagator;
+  bool dimuuse_all_events, smear_template;
 
   po::options_description desc("Allowed options");
   
@@ -801,8 +867,11 @@ int main (int argc, const char** argv) {
     //("pTparamfile", po::value<string>(&pTparamfile)->default_value("./pTparameters/pTparameters.csv"))
     ("Wcharge", po::value(&Wcharge)->default_value("Wp"))
     //("Zoutput_name", po::value(&Zoutput_name)->default_value("./rootfiles/Zsampletest_lhcbcuts.root"))
-    ("dimurootfile", po::value(&dimurootfile)->default_value("/data/lhcb/users/mvesteri/GenLevelV19/merged/13TeV_Z_PowhegPythiaDefault.root"))
+    ("Zrootfile", po::value(&Zrootfile)->default_value("/data/lhcb/users/mvesteri/GenLevelV19/merged/13TeV_Z_PowhegPythiaDefault.root"))
+    ("Yrootfile", po::value(&Yrootfile)->default_value("/home/egan/oxford-lhcb-wmass/Ysamples/pythia_upsilon_nS_10000000.root"))
+    ("dimu_propagator", po::value(&dimu_propagator))
     ("dimuuse_all_events", po::value(&dimuuse_all_events)->default_value(false))
+    ("smear_template", po::value(&smear_template)->default_value(false))
   ;
   /*
   po::positional_options_description pod;
@@ -814,6 +883,14 @@ int main (int argc, const char** argv) {
   po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);
   po::notify(vm);
   
-  Wsample_analysis(ndata_files, Wcharge, dimuuse_all_events, dimurootfile);
+  if (!(vm.count("dimu_propagator"))) {
+    cout << "WARNING: must specify dimu propagator" << endl;
+  } else if (dimu_propagator.compare("Z") == 0) {
+    Wsample_analysis(ndata_files, Wcharge, smear_template, dimuuse_all_events, Zrootfile);
+  } else if (dimu_propagator.compare("Y") == 0) {
+    Wsample_analysis(ndata_files, Wcharge, smear_template, dimuuse_all_events, Yrootfile);
+  } else {
+    Wsample_analysis(ndata_files, Wcharge, smear_template);
+  }
   return 0;
 }
