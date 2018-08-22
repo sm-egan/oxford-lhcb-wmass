@@ -72,7 +72,7 @@ def plot_root_hist (rootfileo, Hstr):
     fig.savefig(plot_name + '.png', bbox_inches='tight')
     
 
-def hist_ratio_plot(rootfileo, nominalHstr, targetHstr, wHstr = "None"):
+def hist_ratio_plot(rootfileo, nominalHstr, targetHstr, xmin = "", xmax = "", wHstr = "None"):
 
     nominalH = rootfileo.Get(nominalHstr)
     targetH = rootfileo.Get(targetHstr)
@@ -201,18 +201,28 @@ def hist_ratio_plot(rootfileo, nominalHstr, targetHstr, wHstr = "None"):
     #You should find a way to get these numbers automatically
     if nominalHstr.find('Z') > -1:
         nominal_label = 'Nominal Z'
-        xmin = 80
-        xmax = 100
+        if xmin == "" or xmax == "":
+            xmin = 80
+            xmax = 100
         xlabel = 'Dimuon invariant mass (GeV)'
     elif nominalHstr.find('Upsilon') > -1:
         nominal_label = 'Nominal Upsilon'
-        xmin = 9.45601
-        xmax = 9.45605
-        xlabel = 'Dimuon invariant mass (GeV)'
+        if xmin == "" or xmax == "":
+            xmin = 9.45601
+            xmax = 9.45605
+        if nominalHstr.find('deltamuPT') > -1:
+            xlabel = '$p_T^{\mu^-} - p_T^{\mu^+}$ ($GeV/c$)'
+        elif nominalHstr.find('deltamuP') > -1:
+            xlabel = '$p^{\mu^-} - p^{\mu^+}$ ($GeV/c$)'
+        elif nominalHstr.find('asym_dmuP') > -1:
+            xlabel = '$p^{\mu^-} - p^{\mu^+}$ / $p^{\mu^-} + p^{\mu^+}$'
+        elif nominalHstr.find('asym_dmuPT') > -1:
+            xlabel = '$p_T^{\mu^-} - p_T^{\mu^+}$ / $p_T^{\mu^-} + p_T^{\mu^+}$'
     else:
         nominal_label = 'Nominal W mass (80.40 GeV)'
-        xmin = 30
-        xmax = 50
+        if xmin == "" or xmax == "":
+            xmin = 30
+            xmax = 50
         xlabel = 'Muon pT (GeV)'
 
     histx = np.linspace(xmin, xmax, nbinsN, endpoint=True)
@@ -251,12 +261,13 @@ def hist_ratio_plot(rootfileo, nominalHstr, targetHstr, wHstr = "None"):
     axRatios.step(histx, ratioTN, where='post', c='b')    
 
     axRatios.set_xlabel(xlabel)
-    axRatios.set_ylabel('Target/Nominal')
+    axRatios.set_ylabel('Toy/Template')
     
-    if nominalHstr.find('Z') > -1: 
+    if nominalHstr.find('Z') or nominalHstr.find('Upsilon') > -1: 
         axHist.legend(loc = 'upper center', bbox_to_anchor=(0., 1.02, 1., .102), ncol=legendcol, mode = 'expand', borderaxespad=0.)
     else:
         axHist.legend()
+
     plot_name = 'plots/hist_ratio_plots/hist_ratios_' + targetHstr
     fig1.savefig(plot_name + '.pdf', bbox_inches='tight')
     fig1.savefig(plot_name + '.png', bbox_inches='tight')
@@ -292,10 +303,13 @@ if __name__ == "__main__":
         plot_root_hist(input, H)
 
     elif len(sys.argv) == 4:
+        nominalH = sys.argv[2]
         targetH = sys.argv[3]
         hist_ratio_plot(input, nominalH, targetH)
 
     elif len(sys.argv) > 4:
+        nominalH = sys.argv[2]
+        targetH = sys.argv[3]
         compareH = sys.argv[4]
         hist_ratio_plot(input, nominalH, targetH, compareH)
     

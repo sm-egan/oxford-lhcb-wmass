@@ -28,14 +28,19 @@ if __name__ == "__main__":
     firstrow = True
     chi2results = [[]]
     pTParams = [[]]
+    chi2count = 0
     with open(chi2file) as csvfile:
         readCSV = csv.reader(csvfile, delimiter = ',', quoting=csv.QUOTE_NONNUMERIC)
         for row in readCSV:
-            if (firstrow): 
-                chi2results[0] = row
-                firstrow = False
+            if chi2count > 3:
+                break 
             else:
-                chi2results.append(row)
+                if (firstrow): 
+                    chi2results[0] = row
+                    firstrow = False
+                else:
+                    chi2results.append(row)
+                chi2count += 1
     
     len(chi2results)
     len(pTParams)

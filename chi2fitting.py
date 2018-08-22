@@ -13,7 +13,7 @@ fileinfo = sys.argv[1]
 if len(sys.argv) > 2:
     pTfile = sys.argv[2]
 else:
-    pTfile = fileinfo
+    pTfile = fileinfo 
 filename = './rootfiles/' + fileinfo + '.root'
 #pTmethods = ['GausSmear']
 pTmethods = ['GausSmear', 'GausSmear_pTdependent', 'ConstFactor', 'CurveOffset']
