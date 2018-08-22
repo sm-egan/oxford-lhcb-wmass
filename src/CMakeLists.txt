@@ -22,11 +22,20 @@ if(TBB_FOUND)
   add_definitions(${TBB_DEFINITIONS})
 endif(TBB_FOUND)
 
+<<<<<<< HEAD
 find_package(LHAPDF)
 find_package(Pythia8)
 include_directories(${Pythia8_INCLUDE_DIR})
 
 
+=======
+#---Find LHAPDF, but don't make it required---
+find_package(LHAPDF)
+
+find_package(Pythia8)
+include_directories(${Pythia8_INCLUDE_DIR})
+
+>>>>>>> 7feead1a536456393c67579678ebca2536e654ad
 #---Find Boost---
 find_package(Boost 1.32.0 COMPONENTS system program_options filesystem regex REQUIRED)
 include_directories(${Boost_INCLUDE_DIRS}) 
@@ -57,6 +66,7 @@ set(CMAKE_INSTALL_LIBDIR ${oxford-lhcb-wmass_SOURCE_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${oxford-lhcb-wmass_SOURCE_DIR}/lib)
 
 #---Setup our executables---
+<<<<<<< HEAD
 
 add_executable(build_compare_histograms.exe build_compare_histograms.cxx)
 target_link_libraries(build_compare_histograms.exe LINK_PUBLIC
@@ -65,3 +75,14 @@ target_link_libraries(build_compare_histograms.exe LINK_PUBLIC
 add_executable(runPythia.exe runPythia.cxx)
 target_link_libraries(runPythia.exe LINK_PUBLIC 
   ${ROOT_LIBRARIES} ${Boost_LIBRARIES} ${PYTHIA8_LIBRARIES})
+=======
+add_executable(runPythia.exe runPythia.cxx)
+target_link_libraries(runPythia.exe LINK_PUBLIC 
+  ${ROOT_LIBRARIES} ${Boost_LIBRARIES} ${PYTHIA8_LIBRARIES})
+
+add_executable(create_templates.exe create_templates.cxx)
+target_link_libraries(create_templates.exe LINK_PUBLIC 
+  ${ROOT_LIBRARIES} ${Boost_LIBRARIES})
+
+
+>>>>>>> 7feead1a536456393c67579678ebca2536e654ad

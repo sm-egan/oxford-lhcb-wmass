@@ -24,8 +24,13 @@ int main( int argc, const char** argv )
     ("help", "produce help message")
     ("nEvents",po::value(&nEvents)->default_value(1000))
     ("seed",po::value(&seed)->default_value(1))
+<<<<<<< HEAD
     ("eCM",po::value(&eCM)->default_value(13000.)) // COM enery 13 TeV
     ("outputFile",po::value(&outputFile)->default_value("/home/egan/oxford-lhcb-wmass/Ysamples/pythia_upsilon.root"))
+=======
+    ("eCM",po::value(&eCM)->default_value(13000.))
+    ("outputFile",po::value(&outputFile)->default_value("pythia.root"))
+>>>>>>> 7feead1a536456393c67579678ebca2536e654ad
     ;
 
   
@@ -45,9 +50,13 @@ int main( int argc, const char** argv )
   pythia.readString("Main:numberOfEvents = "+std::to_string(nEvents));
   pythia.readString("Beams:eCM = "+std::to_string(eCM));
   pythia.readString("Random:seed = "+std::to_string(seed));
+<<<<<<< HEAD
   pythia.readString("Bottomonium:all = off");//TODO: figure out how to switch on only Upsilon(1S)
   pythia.readString("Bottomonium:gg2bbbar(3S1)[3S1(1)]g = on,off,off");
   pythia.readString("553:onMode = off");
+=======
+  pythia.readString("Bottomonium:all = on");//TODO: figure out how to switch on only Upsilon(1S)
+>>>>>>> 7feead1a536456393c67579678ebca2536e654ad
   pythia.readString("553:onIfAny = 13"); //only decays to muon for the Upsilon(1S) (MC particle ID = 553)
   pythia.readString("PartonLevel:MPI = off");
 
@@ -79,10 +88,15 @@ int main( int argc, const char** argv )
   tree->Branch(lep2brname +"_ETA",&lep2_ETA,lep2brname +"_ETA/F");
   tree->Branch(lep2brname +"_PHI",&lep2_PHI,lep2brname +"_PHI/F");
   tree->Branch(lep2brname +"_ID",&lep2_ID,lep2brname +"_ID/I");
+<<<<<<< HEAD
+=======
+  
+>>>>>>> 7feead1a536456393c67579678ebca2536e654ad
     
   pythia.init();
   
   TLorentzVector lep1,lep2;
+<<<<<<< HEAD
   std::map <double, Pythia8::Particle> mu_map;
   std::map <double, Pythia8::Particle> antimu_map;
   std::pair <std::map<double, Pythia8::Particle>::iterator,bool> inserted;
@@ -145,6 +159,35 @@ int main( int argc, const char** argv )
       tree->Fill();
     }
     
+=======
+  for (int iEvent = 0; iEvent < nEvents; ++iEvent ) {
+    
+    //if (!pythia.next()) continue;
+    //todo: sort the particles by pT.
+    //i.e. pick the two highest pT muons in the event
+    for ( auto i = 0; i < (int)pythia.event.size(); ++i){
+      Pythia8::Particle P(pythia.event[i]);
+      if(pythia.event[i].isFinal()){
+	bool goodLep1 = P.id() == -13;
+	bool goodLep2 = P.id() == 13;
+	if (goodLep1){
+	  lep1_ID = P.id();
+	  lep1.SetPxPyPzE(P.px(),P.py(),P.pz(),P.e());
+	}else if (goodLep2){
+	  lep2_ID = P.id();
+	  lep2.SetPxPyPzE(P.px(),P.py(),P.pz(),P.e());
+	}
+      }
+    }
+    lep1_PT = lep1.Pt();
+    lep1_ETA = lep1.Eta();
+    lep1_PHI = lep1.Phi();
+    lep2_PT = lep2.Pt();
+    lep2_ETA = lep2.Eta();
+    lep2_PHI = lep2.Phi();
+    
+    tree->Fill();
+>>>>>>> 7feead1a536456393c67579678ebca2536e654ad
   } // End of event loop.
   
   output->Write();

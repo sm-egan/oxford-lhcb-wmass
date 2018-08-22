@@ -48,10 +48,17 @@ RM = /cvmfs/lhcb.cern.ch/lib/contrib/CMake/3.11.0/Linux-x86_64/bin/cmake -E remo
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
+<<<<<<< HEAD
 CMAKE_SOURCE_DIR = /home/egan/oxford-lhcb-wmass
 
 # The top-level build directory on which CMake was run.
 CMAKE_BINARY_DIR = /home/egan/oxford-lhcb-wmass
+=======
+CMAKE_SOURCE_DIR = /home/vesterinen/oxford-lhcb-wmass
+
+# The top-level build directory on which CMake was run.
+CMAKE_BINARY_DIR = /home/vesterinen/oxford-lhcb-wmass
+>>>>>>> 7feead1a536456393c67579678ebca2536e654ad
 
 #=============================================================================
 # Targets provided globally by CMake.
@@ -80,9 +87,15 @@ edit_cache/fast: edit_cache
 
 # The main all target
 all: cmake_check_build_system
+<<<<<<< HEAD
 	$(CMAKE_COMMAND) -E cmake_progress_start /home/egan/oxford-lhcb-wmass/CMakeFiles /home/egan/oxford-lhcb-wmass/CMakeFiles/progress.marks
 	$(MAKE) -f CMakeFiles/Makefile2 all
 	$(CMAKE_COMMAND) -E cmake_progress_start /home/egan/oxford-lhcb-wmass/CMakeFiles 0
+=======
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/vesterinen/oxford-lhcb-wmass/CMakeFiles /home/vesterinen/oxford-lhcb-wmass/CMakeFiles/progress.marks
+	$(MAKE) -f CMakeFiles/Makefile2 all
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/vesterinen/oxford-lhcb-wmass/CMakeFiles 0
+>>>>>>> 7feead1a536456393c67579678ebca2536e654ad
 .PHONY : all
 
 # The main clean target
@@ -111,6 +124,22 @@ depend:
 .PHONY : depend
 
 #=============================================================================
+<<<<<<< HEAD
+=======
+# Target rules for targets named create_templates.exe
+
+# Build rule for target.
+create_templates.exe: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 create_templates.exe
+.PHONY : create_templates.exe
+
+# fast build rule for target.
+create_templates.exe/fast:
+	$(MAKE) -f src/CMakeFiles/create_templates.exe.dir/build.make src/CMakeFiles/create_templates.exe.dir/build
+.PHONY : create_templates.exe/fast
+
+#=============================================================================
+>>>>>>> 7feead1a536456393c67579678ebca2536e654ad
 # Target rules for targets named runPythia.exe
 
 # Build rule for target.
@@ -123,6 +152,7 @@ runPythia.exe/fast:
 	$(MAKE) -f src/CMakeFiles/runPythia.exe.dir/build.make src/CMakeFiles/runPythia.exe.dir/build
 .PHONY : runPythia.exe/fast
 
+<<<<<<< HEAD
 #=============================================================================
 # Target rules for targets named build_compare_histograms.exe
 
@@ -136,6 +166,8 @@ build_compare_histograms.exe/fast:
 	$(MAKE) -f src/CMakeFiles/build_compare_histograms.exe.dir/build.make src/CMakeFiles/build_compare_histograms.exe.dir/build
 .PHONY : build_compare_histograms.exe/fast
 
+=======
+>>>>>>> 7feead1a536456393c67579678ebca2536e654ad
 # Help Target
 help:
 	@echo "The following are some of the valid targets for this Makefile:"
@@ -144,8 +176,13 @@ help:
 	@echo "... depend"
 	@echo "... rebuild_cache"
 	@echo "... edit_cache"
+<<<<<<< HEAD
 	@echo "... runPythia.exe"
 	@echo "... build_compare_histograms.exe"
+=======
+	@echo "... create_templates.exe"
+	@echo "... runPythia.exe"
+>>>>>>> 7feead1a536456393c67579678ebca2536e654ad
 .PHONY : help
 
 
