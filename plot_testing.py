@@ -18,6 +18,9 @@ def simple_scatter(x, y, title='', xlabel='x', ylabel='y'):
     fig.savefig('plots/' + title + '.png')
     fig.savefig('plots/' + title + '.pdf')
 
+def 2d_chi2_pTparams ():
+
+
 def plot_root_hist (rootfileo, Hstr):
     H = rootfileo.Get(Hstr)
     nbins = H.GetNbinsX()
@@ -72,7 +75,7 @@ def plot_root_hist (rootfileo, Hstr):
     fig.savefig(plot_name + '.png', bbox_inches='tight')
     
 
-def hist_ratio_plot(rootfileo, nominalHstr, targetHstr, xmin = "", xmax = "", wHstr = "None"):
+def hist_ratio_plot(rootfileo, nominalHstr, targetHstr, wHstr = 'None', xmin = "", xmax = ""):
 
     nominalH = rootfileo.Get(nominalHstr)
     targetH = rootfileo.Get(targetHstr)
@@ -102,7 +105,7 @@ def hist_ratio_plot(rootfileo, nominalHstr, targetHstr, xmin = "", xmax = "", wH
     entrycountN = 0
     entrycountT = 0
 
-    if not wHstr == "None":
+    if wHstr.find('None') ==  -1:
         print("THIRD HISTOGRAM GIVEN, INITIALIZING VARIABLES")
         WpredH = rootfileo.Get(wHstr)
         WpredH.Scale(targetH.Integral()/WpredH.Integral())
@@ -153,7 +156,7 @@ def hist_ratio_plot(rootfileo, nominalHstr, targetHstr, xmin = "", xmax = "", wH
         ratioerrTN.append(errorratioT)
         #ratiosumT += (bincountT - bincountN)/bincountN
     
-        if not wHstr == "None":
+        if wHstr.find('None') == -1:
             bincountW = WpredH.GetBinContent(bin)
             binerrorW = WpredH.GetBinError(bin)
             #print(binerrorW)
@@ -229,7 +232,7 @@ def hist_ratio_plot(rootfileo, nominalHstr, targetHstr, xmin = "", xmax = "", wH
     axHist.step(histx, countsN, where='post', label=nominal_label, c='k')   
     legendcol = 2
     
-    if not wHstr == "None":
+    if wHstr.find('None') == -1:
         print("ADDING NEAREST w TEMPLATE TO PLOT")
         '''
         countsW.append(1)
@@ -240,8 +243,9 @@ def hist_ratio_plot(rootfileo, nominalHstr, targetHstr, xmin = "", xmax = "", wH
         ratioerrWN = np.array(ratioerrWN)
         pluserrWN = ratioWN + ratioerrWN
         minuserrWN = ratioWN - ratioerrWN
-
-        axRatios.fill_between(histx, ratioWN+ratioerrWN, ratioWN-ratioerrWN, step='post', alpha=0.5, linestyle='-.', color='m')
+        
+        axRatios.errorbar(histx, ratioWN, yerr=ratioerrWN, fmt='none',capsize=3, color = 'm')
+        #axRatios.fill_between(histx, ratioWN+ratioerrWN, ratioWN-ratioerrWN, step='post', alpha=0.5, linestyle='-.', color='m')
         axRatios.step(histx, ratioWN, where='post', c='r')
 
         pred_mass = (int(wHstr[-1]) - 6)*0.1 + 80.40
@@ -257,7 +261,8 @@ def hist_ratio_plot(rootfileo, nominalHstr, targetHstr, xmin = "", xmax = "", wH
 
     #axRatios.fill_between(histx, normline+ratioerrNN, normline-ratioerrNN, step='post', alpha=0.5, linestyle='--', color='k')
     axRatios.plot(histx, normline, c='k')
-    axRatios.fill_between(histx, ratioTN+ratioerrTN, ratioTN-ratioerrTN, step='post', alpha=0.5, linestyle='--', color='c')
+    axRatios.errorbar(histx, ratioTN, yerr=ratioerrTN, fmt='none',capsize=3, color='c')
+    #axRatios.fill_between(histx, ratioTN+ratioerrTN, ratioTN-ratioerrTN, step='post', alpha=0.5, linestyle='--', color='c')
     axRatios.step(histx, ratioTN, where='post', c='b')    
 
     axRatios.set_xlabel(xlabel)

@@ -45,10 +45,10 @@ Double_t GausSmear_pTdependent (Double_t value, Double_t adjparameter) {
   return value;
 }
 
- Double_t ConstFactor (Double_t value, Double_t adjparameter) {
-   value = value*(1+adjparameter);
-   return value;
- }
+Double_t ConstFactor (Double_t value, Double_t adjparameter) {
+  value = value*(adjparameter);
+  return value;
+}
 
 Double_t CurveOffset (Double_t pT, Double_t adjparameter, Double_t echarge) { //, Double_t eta) {
   pT = (echarge/(echarge/(pT) + adjparameter));
@@ -75,14 +75,14 @@ string make_timestamp (){
 
 string trunc_double (double x, int precision, string format = "decimal") {
   stringstream ss;
-  cout << "trunc_double input: " << x << endl;
+  //cout << "trunc_double input: " << x << endl;
   if (format.compare("decimal") == 0) {
     ss << fixed << setprecision(precision) << x;
   } else if (format.compare("scientific") == 0) {
     ss << scientific << setprecision(precision) << x;
   }
   string outstr = ss.str();
-  cout << "trunc_double stringstream: " << outstr << endl;
+  //cout << "trunc_double stringstream: " << outstr << endl;
   return outstr;
 }
 /*
@@ -113,10 +113,12 @@ void tcanvas_from_vector (vector<TData> vector_to_plot, string canvas_name="", s
   int colourit = 1;
 
   // Flag which forces return if you give only one of the strings.  The flag works off the assumption that you have to upate profile_title if you want to update plot_name, so it tests only if plot_name is still
+  /*
   if ((canvas_name.compare("") != 0) && (plot_name.compare("") == 0)) {
     cout << "tcanvas_from_vector() requires that either all string fields are specified, or that none of them are.  Please revise passage of arguments" << endl;
     return;
   }
+  */
  
   if (canvas_name.compare("") == 0) {
     string c_name ((*vector_to_plot.begin())->GetName());
@@ -128,7 +130,9 @@ void tcanvas_from_vector (vector<TData> vector_to_plot, string canvas_name="", s
   } 
 
   if (plot_name.compare("") == 0) {
-    plot_name = "/home/egan/oxford-lhcb-wmass/plots/" + canvas_name + ".pdf";
+   plot_name = "/home/egan/oxford-lhcb-wmass/plots/" + canvas_name + ".pdf";
+   string plot_namepng;
+   plot_namepng = "/home/egan/oxford-lhcb-wmass/plots/" + canvas_name + ".png";
   }
    
   TCanvas *c = new TCanvas(canvas_name.c_str(), canvas_title.c_str()); 
@@ -149,6 +153,9 @@ void dimuon_analysis (vector< vector<Double_t>> pTparams,
 		      string dimu_propagator,
 		      string rootfile="",
 		      bool smear_template = true,
+		      bool fill_curveobs = false,
+		      bool fill_profiles = false,
+		      bool fill_asymsubsets = false,
 		      bool use_all_events = false) { //="/data/lhcb/users/mvesteri/GenLevelV19/merged/13TeV_Z_PowhegPythiaDefault.root") {
 
   cout << "dimuon_analysis has been called" << endl;
@@ -156,9 +163,9 @@ void dimuon_analysis (vector< vector<Double_t>> pTparams,
   int npTmethods = 4;
   string pTmethods[4] = {"GausSmear", "GausSmear_pTdependent", "ConstFactor", "CurveOffset"};
   int ncurveobs = 2;
-  string curveobservables[2] = {"deltamuPT", "deltamuP"};// "asym_dmuPT", "asym_dmuP"};
+  string curveobservables[2] = {"pasym", "deltamuP"};// "asym_dmuPT", "asym_dmuP"};
   int nprofiles = 2;
-  string profilevars[2] = {"pTasym", "pasym"};
+  string profilevars[2] = {"pasym", "deltamuP"};
 
     //vector< vector<Double_t> > pTparams(npTmethdos);
   string propagator;
@@ -189,17 +196,17 @@ void dimuon_analysis (vector< vector<Double_t>> pTparams,
     hist_lims[0][0] = 9.3;
     hist_lims[0][1] = 9.6; 
 
-    hist_lims[1][0] = -15;
-    hist_lims[1][1] = 15;
+    hist_lims[1][0] = -1;
+    hist_lims[1][1] = 1;
 
-    hist_lims[2][0] = -20;
-    hist_lims[2][1] = 20;
+    hist_lims[2][0] = -200;
+    hist_lims[2][1] = 200;
 
-    hist_lims[3][0] = -1;
-    hist_lims[3][1] = 1;
+    hist_lims[3][0] = 1;
+    hist_lims[3][1] = 0;
 
-    hist_lims[4][0] = -1;
-    hist_lims[4][1] = 1;    
+    hist_lims[4][0] = 1;
+    hist_lims[4][1] = 0;    
 
     string parameterfile = "./pTparameters/" + propagator + "sample.csv";
     ofstream pT_ofs (parameterfile, ofstream::out);
@@ -268,6 +275,7 @@ void dimuon_analysis (vector< vector<Double_t>> pTparams,
   vector< vector<TH1F *> > toys(npTmethods);
   vector< vector <TH1F *> > curveobs(2);
   vector<vector<TProfile *> > profiles(2);
+  vector< vector <TH1F *> > asym_subsets(6);
   
   vector<TH1F *>::iterator toyit;
   vector<Double_t>::iterator pTparamsit;
@@ -280,37 +288,73 @@ void dimuon_analysis (vector< vector<Double_t>> pTparams,
   char hist_name[100];
   char cohist_name[100];
   char hist_title[100];
-  char profile_name[100];      
-  unsigned int methodindex, toyindex, coindex, profindex;
+  char profile_name[100];
+  char asymsubset_name[100];
+  char asymsubset_title[100];
+  unsigned int methodindex, toyindex, coindex, profindex, asymindex;
 
   cout << "size of pTparams: " << pTparams.size() << " size of pTparams row: " << pTparams[0].size() <<endl;
   cout << "size of curveobs: " << curveobs.size() << endl;
 
   ////////////// LOOP TO INITIALIZE THE HISTOGRAMS /////////////////////////////////////
   for (methodindex = 0; methodindex < pTparams.size(); ++methodindex) {
-    cout << "Histogram initialization loop for pT method: " << methodindex << "1. " << pTmethods[methodindex] << endl;
     for (toyindex = 0; toyindex < pTparams[methodindex].size(); ++toyindex) {
       sprintf(hist_name, "%s%s%i", pTmethods[methodindex].c_str(), propagator.c_str(), toyindex);
       sprintf(hist_title, "%s: %f", pTmethods[methodindex].c_str(), pTparams[methodindex][toyindex]);
+
+      if ((methodindex == 2) && fill_asymsubsets) {
+	asymindex = 0;
+	for (vector<vector<TH1F *>>::iterator asymit = asym_subsets.begin(); asymit != next(asym_subsets.begin(), 3); ++asymit) {
+          sprintf(asymsubset_name, "%s%s_asymubset%u%u", pTmethods[methodindex].c_str(), propagator.c_str(), asymindex, toyindex);
+	  sprintf(asymsubset_title, "Dimuon invariant mass for p asymmetry subset %u", asymindex);
+	  TH1F *asymhist = new TH1F(asymsubset_name, asymsubset_title, 50, hist_lims[0][0], hist_lims[0][1]);
+	  (*asymit).push_back(asymhist);
+	  ++asymindex;
+	}
+      }	
       	
-      if (methodindex == 3) {
+      if ((methodindex == 3) && (fill_curveobs || fill_profiles || fill_asymsubsets)) {
 	sprintf(hist_title, "%s: %s", pTmethods[methodindex].c_str(), trunc_double(pTparams[methodindex][toyindex], 2, "scientific").c_str());
-	coindex = 0;
-	profindex = 0;
 
-	for (vector< vector<TH1F *>>::iterator coit = curveobs.begin(); coit != curveobs.end(); ++coit) {	    
-	  sprintf(cohist_name, "%s_%s", curveobservables[coindex].c_str(), hist_name);
-	  TH1F *cohist = new TH1F(cohist_name, hist_title, nbins, hist_lims[coindex+1][0], hist_lims[coindex+1][1]);	  
-	  (*coit).push_back(cohist);
-	  ++coindex;
+	if (fill_curveobs) {
+	  coindex = 0;
+	  for (vector< vector<TH1F *>>::iterator coit = curveobs.begin(); coit != curveobs.end(); ++coit) {	    
+	    sprintf(cohist_name, "%s_%s", curveobservables[coindex].c_str(), hist_name);
+	    TH1F *cohist = new TH1F(cohist_name, hist_title, nbins, hist_lims[coindex+1][0], hist_lims[coindex+1][1]);	  
+	    //TH1F *cohist = new TH1F(cohist_name, hist_title, nbins, 1, 0);	  
+	    (*coit).push_back(cohist);
+	    ++coindex;
+	  }
 	}
 
-	for (vector< vector<TProfile *>>::iterator profit = profiles.begin(); profit != profiles.end(); ++profit) {	    
-	  sprintf(profile_name, "%s_%s_profile%u", propagator.c_str(), profilevars[profindex].c_str(), toyindex);
-	  TProfile *prof = new TProfile(profile_name, "Profile of Dimuon invariant mass vs mu pT asymmetry", 30, -1, 1);
-	  (*profit).push_back(prof);
+	if (fill_profiles) {
+	  profindex = 0;
+	  for (vector< vector<TProfile *>>::iterator profit = profiles.begin(); profit != profiles.end(); ++profit) {	    
+	    sprintf(profile_name, "%s_%s_profile%u", propagator.c_str(), profilevars[profindex].c_str(), toyindex);
+	    if (profilevars[profindex].compare("pasym") == 0) {
+	      TProfile *prof = new TProfile(profile_name, "Profile of Dimuon invariant mass vs mu p asymmetry", 30, hist_lims[1][0], hist_lims[1][1]);
+	      (*profit).push_back(prof);
+	    } else {
+	      TProfile *prof = new TProfile(profile_name, "Profile of Dimuon invariant mass vs difference in mu p", 30, hist_lims[2][0], hist_lims[2][1]);
+	      (*profit).push_back(prof);
+	    }
+	    ++profindex;
+	  }
 	}
+
+	if (fill_asymsubsets) {
+	  asymindex=3;
+	  for (vector<vector<TH1F *>>::iterator asymit = next(asym_subsets.begin(), 3); asymit != asym_subsets.end(); ++asymit) {
+	    sprintf(asymsubset_name, "%s%s_asymubset%u%u", pTmethods[methodindex].c_str(), propagator.c_str(), asymindex, toyindex);
+	    sprintf(asymsubset_title, "Dimuon invariant mass for p asymmetry subset %u", asymindex);
+	    TH1F *asymhist2 = new TH1F(asymsubset_name, asymsubset_title, 50, hist_lims[0][0], hist_lims[0][1]);
+	    (*asymit).push_back(asymhist2);
+	    ++asymindex;
+	  }
+	}
+
       }
+
       cout << "Initializing histogram " << hist_name << endl;
       TH1F *hpT_toy = new TH1F(hist_name, hist_title, nbins, hist_lims[0][0], hist_lims[0][1]);
       toys[methodindex].push_back(hpT_toy);
@@ -328,13 +372,10 @@ void dimuon_analysis (vector< vector<Double_t>> pTparams,
 
   MCDecayTree->SetBranchAddress("mup_PT", &mup_PT);
   MCDecayTree->SetBranchAddress("mum_PT", &mum_PT);
-  //MCDecayTree->SetBranchAddress("prop_M", &prop_M);
   MCDecayTree->SetBranchAddress("mup_ETA", &mup_ETA);
   MCDecayTree->SetBranchAddress("mup_PHI", &mup_PHI);
   MCDecayTree->SetBranchAddress("mum_ETA", &mum_ETA);
   MCDecayTree->SetBranchAddress("mum_PHI", &mum_PHI);
-
-  //cout << "error marker 3" << endl;
 
   MCDecayTree->SetBranchStatus("*", 0);
   MCDecayTree->SetBranchStatus("mup_PT", 1);
@@ -344,14 +385,12 @@ void dimuon_analysis (vector< vector<Double_t>> pTparams,
   MCDecayTree->SetBranchStatus("mup_PHI", 1);
   MCDecayTree->SetBranchStatus("mum_PHI", 1);
 
-  //MCDecayTree->SetBranchStatus("prop_M",1);
-
   TLorentzVector mup, mum, musum;
-    int nentries = MCDecayTree->GetEntries();
+  int nentries = MCDecayTree->GetEntries();
   int nbytes = 0;
+  Double_t asym_limit = 1.0/3.0;
 
   for (int eventit=0; eventit < nentries; ++eventit) {
-    //cout << "error marker 4" <<endl;
     nbytes += MCDecayTree->GetEntry(eventit);
 
     if (smear_template) {
@@ -366,7 +405,7 @@ void dimuon_analysis (vector< vector<Double_t>> pTparams,
       mup_ETA = abs(mup_ETA);
       mum_ETA = abs(mum_ETA);
       // The mu pT cuts need to be adjusted for the upsilon set
-      if ((mup_PT < min_mupT) || (mum_PT < min_mupT) || (mup_ETA < 2.0) || (mup_ETA > 4.5) || (mup_ETA < 2.0) || (mum_ETA > 4.5)) {
+      if ((mup_PTsmear < min_mupT) || (mum_PTsmear < min_mupT) || (mup_ETA < 2.0) || (mup_ETA > 4.5) || (mup_ETA < 2.0) || (mum_ETA > 4.5)) {
 	continue;
       }
     } else continue;
@@ -376,8 +415,6 @@ void dimuon_analysis (vector< vector<Double_t>> pTparams,
       toyindex=0;
       
       for ( auto pTparam0 : pTparams[0] ) {  // (pTparamsit = pTparams.begin(); pTparamsit != pTparams.end(); ++pTparamsit) {
-	//cout << "error marker 4" <<endl;
-
 	mup_PTadj = GausSmear(mup_PT, pTparam0);
 	//mup_PTadj = GausSmear(mup_PT, *pTparamsit);
 	mum_PTadj = GausSmear(mum_PT, pTparam0);
@@ -396,7 +433,6 @@ void dimuon_analysis (vector< vector<Double_t>> pTparams,
       if (npTmethods > 1) {
 	toyindex=0;
 	for ( auto pTparam1 : pTparams[1] ) {  // (pTparamsit = pTparams.begin(); pTparamsit != pTparams.end(); ++pTparamsit) {
-	    //cout << "error marker 4" <<endl;
 	  mup_PTadj = GausSmear_pTdependent(mup_PT, pTparam1);
 	  //mup_PTadj = GausSmear_pTdependent(mup_PT, *pTparamsit);
 	  mum_PTadj = GausSmear_pTdependent(mum_PT, pTparam1);
@@ -427,6 +463,20 @@ void dimuon_analysis (vector< vector<Double_t>> pTparams,
 	  musum = mup + mum;
 
 	  toys[2][toyindex]->Fill(musum.M());
+	  
+	  if (fill_asymsubsets) {
+	    Double_t pasymmetry = (mum_PTadj*cosh(mum_ETA)-mup_PTadj*cosh(mup_ETA))/(mum_PTadj*cosh(mum_ETA) + mup_PTadj*cosh(mup_ETA));
+
+	    if (pasymmetry < (-asym_limit)) {
+	      asym_subsets[0][toyindex]->Fill(musum.M());
+	    } else if  ((pasymmetry >= (-asym_limit)) && (pasymmetry < asym_limit)) {
+	      asym_subsets[1][toyindex]->Fill(musum.M());
+	    } else if (pasymmetry >= asym_limit) {
+	      asym_subsets[2][toyindex]->Fill(musum.M());
+	    } else {
+	      cout << "Event " << eventit <<": Could not match the asymmetry to the desired range" << endl;
+	    }
+	  }
 	  ++toyindex;
 	}
       }
@@ -448,14 +498,31 @@ void dimuon_analysis (vector< vector<Double_t>> pTparams,
 	  
 	  //curveobs[2][toyindex]->Fill((mum_PTadj-mup_PTadj)/(mum_PTadj + mup_PTadj));
 	  //curveobs[3][toyindex]->Fill((mum_PTadj*cosh(mum_ETA)-mup_PTadj*cosh(mup_ETA))/(mum_PTadj*cosh(mum_ETA) + mup_PTadj*cosh(mup_ETA)));
-	  Double_t pTasymmetry = (mum_PTadj-mup_PTadj)/(mum_PTadj + mup_PTadj);
-	  Double_t pasymmetry = (mum_PTadj*cosh(mum_ETA)-mup_PTadj*cosh(mup_ETA))/(mum_PTadj*cosh(mum_ETA) + mup_PTadj*cosh(mup_ETA));
-
-	  curveobs[0][toyindex]->Fill(mum_PTadj-mup_PTadj);
-	  curveobs[1][toyindex]->Fill((mum_PTadj*cosh(mum_ETA))-(mup_PTadj*cosh(mup_ETA)));
-
-	  profiles[0][toyindex]->Fill(pTasymmetry, musum.M());
-	  profiles[1][toyindex]->Fill(pasymmetry, musum.M());
+	  //Double_t pTasymmetry = (mum_PTadj-mup_PTadj)/(mum_PTadj + mup_PTadj);
+	  if (fill_curveobs || fill_profiles || fill_asymsubsets) {
+	    Double_t pasymmetry = (mum_PTadj*cosh(mum_ETA)-mup_PTadj*cosh(mup_ETA))/(mum_PTadj*cosh(mum_ETA) + mup_PTadj*cosh(mup_ETA));
+	    Double_t deltamup = (mum_PTadj*cosh(mum_ETA)-mup_PTadj*cosh(mup_ETA));
+	    
+	    if (fill_curveobs) {
+	      curveobs[0][toyindex]->Fill(pasymmetry);
+	      curveobs[1][toyindex]->Fill(deltamup);
+	    }
+	    if (fill_profiles) {
+	      profiles[0][toyindex]->Fill(pasymmetry, musum.M());
+	      profiles[1][toyindex]->Fill(deltamup, musum.M());
+	    }
+	    if (fill_asymsubsets) {
+	      if (pasymmetry < (-asym_limit)) {
+		asym_subsets[3][toyindex]->Fill(musum.M());
+	      } else if  ((pasymmetry >= (-asym_limit)) && (pasymmetry < asym_limit)) {
+		asym_subsets[4][toyindex]->Fill(musum.M());
+	      } else if (pasymmetry >= asym_limit) {
+		asym_subsets[5][toyindex]->Fill(musum.M());
+	      } else {
+		cout << "Event " << eventit <<": Could not match the asymmetry to the desired range" << endl;
+	      }
+	    }
+	  }
 	  ++toyindex;
 	}
       }
@@ -476,7 +543,12 @@ void dimuon_analysis (vector< vector<Double_t>> pTparams,
 
   tcanvas_from_vector(profiles[0]);
   tcanvas_from_vector(profiles[1]);
-
+  tcanvas_from_vector(asym_subsets[0]);
+  tcanvas_from_vector(asym_subsets[1]);
+  tcanvas_from_vector(asym_subsets[2]);
+  tcanvas_from_vector(asym_subsets[3]);
+  tcanvas_from_vector(asym_subsets[4]);
+  tcanvas_from_vector(asym_subsets[5]);
 
   ////////////////////////////////////////////////////////////////////////////////////////////
   ///////////////////////////////// PERFORMING CHI2 TEST /////////////////////////////////////
@@ -598,6 +670,9 @@ void Zanalysis (string pTparamfile="./pTparameters.csv", string rootfile="/data/
 void Wsample_analysis (int ndata_files, string Wcharge,string dimu_propagator,
 		       string dimurootfile="",
 		       bool smear_template = true,
+		       bool fill_curveobs = false,
+		       bool fill_profiles = false,
+		       bool fill_asymsubsets = false,
 		       bool dimuuse_all_events = false) {
 
   int hist_dims[3] = {40,30,50};
@@ -609,7 +684,7 @@ void Wsample_analysis (int ndata_files, string Wcharge,string dimu_propagator,
 
   int ntemplates = 11;
   int ntoys = 6;
-  double pTparam_limits[8] = {0.0025, 0.025, 0.0001, 0.005, -0.0015, 0.0015, 0.0, 6e-25};
+  double pTparam_limits[8] = {0.004, 0.012, 0.005, 0.01, 0.9985, 1.0015, 0.0, 6e-25};
 
   Double_t MWnom = 80.4;  
   Double_t gamma = 2.15553;
@@ -642,8 +717,6 @@ void Wsample_analysis (int ndata_files, string Wcharge,string dimu_propagator,
   string template_name;
   string template_title;
 
-  cout << "error marker 1" << endl;
-
   // Initialize a vector of W mass hypotheses which will assist in iterating over and filling template histograms
   for (Double_t MWhyp=79.8; MWhyp<=80.8; MWhyp+=(80.8-79.8)/(ntemplates-1)) { //Mhyp for mass hypothesis
     Wmasses.push_back(MWhyp);  
@@ -660,7 +733,6 @@ void Wsample_analysis (int ndata_files, string Wcharge,string dimu_propagator,
     ++templateindex;
   }
   templateindex = 0;
-  cout << "error marker 2" << endl;
   
   //stringstream value;
   string toy_name;
@@ -677,12 +749,10 @@ void Wsample_analysis (int ndata_files, string Wcharge,string dimu_propagator,
     ++toyindex;
   }
 
-  cout << "error marker 3" << endl;
-
   if (npTmethods > 1) {
     toyindex = 0;
     for (Double_t pTparam1 = pTparam_limits[2]; pTparam1 <= pTparam_limits[3]; pTparam1 += (pTparam_limits[3]-pTparam_limits[2])/(ntoys-1)) {
-      pTparams[1].push_back(pTparam1);
+      pTparams[1].push_back(pTparam1); 
 
       //value << fixed << setprecision(5) << pTparam;
       toy_name = pTmethods[1]  + Wcharge + to_string(toyindex);
@@ -692,7 +762,6 @@ void Wsample_analysis (int ndata_files, string Wcharge,string dimu_propagator,
 
       ++toyindex;
     }
-    cout << "error marker 4" << endl;
   }
 
   if (npTmethods > 2) {
@@ -701,13 +770,12 @@ void Wsample_analysis (int ndata_files, string Wcharge,string dimu_propagator,
       pTparams[2].push_back(pTparam2);
             //value << fixed << setprecision(4) << pTparam;
       toy_name = pTmethods[2] + Wcharge + to_string(toyindex);
-      sprintf(toy_title, "mu_PT -> %f * mu_PT", 1+pTparam2);
+      sprintf(toy_title, "mu_PT -> %f * mu_PT", pTparam2);
       TH1F *hpT_toy = new TH1F(toy_name.c_str(), toy_title, hist_dims[0], hist_dims[1], hist_dims[2]);
       toys[2].push_back(hpT_toy);
 
       ++toyindex;
     }
-    cout <<"error marker 5" << endl;
   }
 
   if (npTmethods > 3) {
@@ -722,7 +790,6 @@ void Wsample_analysis (int ndata_files, string Wcharge,string dimu_propagator,
 
       ++toyindex;
     }
-    cout << "error marker 6" << endl;
   }
 
   
@@ -742,9 +809,6 @@ void Wsample_analysis (int ndata_files, string Wcharge,string dimu_propagator,
   
   pT_ofs.close();
 
-
-  //  cout << "Error marker 2" << endl;
-
   TChain *MCDecayTree = new TChain("MCDecayTree");
   char filename[200];
 
@@ -758,7 +822,7 @@ void Wsample_analysis (int ndata_files, string Wcharge,string dimu_propagator,
   
 //Declaration of leaves types
   Float_t prop_M, mu_PT, mu_ETA;
-  Float_t mu_PTadj, mu_PTsmear;
+  Float_t mu_PTadj, mu_PTsmear, muPT_smeartest;
   MCDecayTree->SetBranchAddress("mu_PT", &mu_PT);
   MCDecayTree->SetBranchAddress("mu_ETA", &mu_ETA);
   MCDecayTree->SetBranchAddress("prop_M", &prop_M);
@@ -772,9 +836,26 @@ void Wsample_analysis (int ndata_files, string Wcharge,string dimu_propagator,
   cout << "nentries: " << nentries << endl;
   Long64_t nbytes = 0;
 
-  TH1F *propM = new TH1F("propM", "propM from simulation", 40, 75, 85);
-  propM->GetXaxis()->SetTitle("Mass of W propagator");
-  propM->GetYaxis()->SetTitle("Counts");
+  TH1F *momentumH = new TH1F("momentumH", "Total momentum of muon from W decay", 50, 50, 500);
+  TProfile *dppProfile = new TProfile("dppProfile", "Profile of dp/p versus p", 50, 0, 500);
+
+
+  /////////////// INITIALIZE HISTOGRAMS FOR VERIFYING EQUIVALENCE OF 
+  vector<TH1F *> smeartests(2);
+  //TH1F *smeartest1 = new TH1F("smeartest1", "pT of muon smeared by propagated uncertainty", 40, 30, 50);
+  //TH1F *smeartest2 = new TH1F("smeartest2", "pT of muon smeared by propagated uncertainty", 40, 30, 50);
+  smeartests[0] = new TH1F("smeartest1", "pT of muon smeared by propagated uncertainty", 40, 30, 50);
+  smeartests[1] = new TH1F("smeartest2", "pT of muon smeared by propagated uncertainty", 40, 30, 50);
+
+
+  ////////// INITIALIZE HISTOGRAMS FOR VERIFYING DISTRIBUTION OF COMBINED SMEAR COEFFICIENT  ///////////////////////////
+  vector<TH1F *> smears(3);
+  smears[0] = new TH1F("gssmear", "Histogram of standard Gaussian smear factor", 30, 1, 0);
+  smears[1] = new TH1F("gsptsmear", "Histogram of pT dependent Gaussian smear factor", 30, 1, 0);
+  smears[2] = new TH1F("combinedsmear", "Histogram of 50/50 weight combined smear", 30, 1, 0);
+  Double_t gssmear, gsptsmear, combsmear;
+  //propM->GetXaxis()->SetTitle("Mass of W propagator");
+  //propM->GetYaxis()->SetTitle("Counts");
 
   Double_t xs;
   if(Wcharge.compare("Wm") == 0) {   
@@ -788,22 +869,32 @@ void Wsample_analysis (int ndata_files, string Wcharge,string dimu_propagator,
     nbytes += MCDecayTree->GetEntry(eventit);
 
     if (smear_template) {
-      mu_PTsmear = GausSmear(mu_PT, 0.005);
+      gssmear = gRandom->Gaus(1,0.008);
+      gsptsmear = gRandom->Gaus(1, log10(mu_PT*cosh(mu_ETA))*0.0075);
+      combsmear = 0.5*gssmear + 0.5*gsptsmear;
+      mu_PTsmear = mu_PT*(combsmear);//GausSmear(mu_PT, 0.005);
+
+      smeartests[0]->Fill(mu_PTsmear);
+      smeartests[1]->Fill(mu_PT*gRandom->Gaus(1, 0.5*sqrt(pow(0.008, 2) + pow(0.0075*log10(mu_PT*mu_ETA), 2))));      
+      
+      dppProfile->Fill(mu_PT*cosh(mu_ETA), 0.5*sqrt(pow(0.008,2) + pow(0.0075*log10(mu_PT*cosh(mu_ETA)),2)));
+      smears[0]->Fill(gssmear);
+      smears[1]->Fill(gsptsmear);
+      smears[2]->Fill(combsmear);
     } else {
       mu_PTsmear = mu_PT;
     }
     // Find events which do not meet the LHCb acceptance range or minimu pT and skip them
-    if ((mu_PT < 20) || (mu_ETA < 2.0) || (mu_ETA > 4.5)) {
+    if ((mu_PTsmear < 20) || (mu_ETA < 2.0) || (mu_ETA > 4.5)) {
       continue;
     }
-
-    propM->Fill(prop_M);
+    momentumH->Fill(mu_PT*cosh(mu_ETA));
+    //propM->Fill(prop_M);
 
     if ((eventit%2 == 0) || use_all_events) {
       
       toyindex=0;
       for ( auto pTparam0 : pTparams[0] ) {  // (pTparamsit = pTparams.begin(); pTparamsit != pTparams.end(); ++pTparamsit) {
-	//cout << "error marker 4" <<endl;
 	mu_PTadj = GausSmear(mu_PT, pTparam0);
 	toys[0][toyindex]->Fill(mu_PTadj);
 	++toyindex;
@@ -812,7 +903,6 @@ void Wsample_analysis (int ndata_files, string Wcharge,string dimu_propagator,
       if (npTmethods > 1) {
 	toyindex=0;
 	for ( auto pTparam1 : pTparams[1] ) {  // (pTparamsit = pTparams.begin(); pTparamsit != pTparams.end(); ++pTparamsit) {
-	    //cout << "error marker 4" <<endl;
 	  mu_PTadj = GausSmear_pTdependent(mu_PT, pTparam1);
 	  toys[1][toyindex]->Fill(mu_PTadj);
 	  ++toyindex;
@@ -842,10 +932,10 @@ void Wsample_analysis (int ndata_files, string Wcharge,string dimu_propagator,
     if ((eventit % 2 == 1) || use_all_events) {
       templateindex = 0;
       const auto denominator = TMath::BreitWigner(prop_M, MWnom, gamma); 
-      mu_PTadj = GausSmear(mu_PTsmear, 0.005);
+      //mu_PTadj = GausSmear(mu_PTsmear, 0.005);
       //mu_PTadj = mu_PT;
       for ( auto Wmass : Wmasses ){
-	templates[templateindex]->Fill(mu_PTadj, TMath::BreitWigner(prop_M, Wmass, gamma)/denominator);
+	templates[templateindex]->Fill(mu_PTsmear, TMath::BreitWigner(prop_M, Wmass, gamma)/denominator);
 	++templateindex;
       }
     }
@@ -853,6 +943,8 @@ void Wsample_analysis (int ndata_files, string Wcharge,string dimu_propagator,
  
   string templatesHname = "~/oxford-lhcb-wmass/plots/" + Wcharge + "templatesHist.pdf";
   tcanvas_from_vector(templates, "cBW", "mu PT with different W mass hypotheses", templatesHname);
+  tcanvas_from_vector(smeartests);
+
 
   /////////////////////////////// PERFORMING A CHI SQUARE TEST //////////////////////////////////////////
 
@@ -946,14 +1038,14 @@ void Wsample_analysis (int ndata_files, string Wcharge,string dimu_propagator,
   output->Close();
 
   if ((dimu_propagator.compare("Y") == 0) || (dimu_propagator.compare("Z") == 0)) {
-    dimuon_analysis(pTparams, dimu_propagator, dimurootfile, smear_template, dimuuse_all_events);
+    dimuon_analysis(pTparams, dimu_propagator, dimurootfile, smear_template, fill_curveobs, fill_profiles, fill_asymsubsets, dimuuse_all_events);
   }
 }
 
 int main (int argc, const char** argv) {
   int ndata_files;
   string Wcharge, Zrootfile, Yrootfile, dimu_propagator;
-  bool dimuuse_all_events, smear_template;
+  bool dimuuse_all_events, smear_template, fill_curveobs, fill_profiles, fill_asymsubsets;
 
   po::options_description desc("Allowed options");
   
@@ -969,6 +1061,9 @@ int main (int argc, const char** argv) {
     ("dimu_propagator", po::value(&dimu_propagator))
     ("dimuuse_all_events", po::value(&dimuuse_all_events)->default_value(false))
     ("smear_template", po::value(&smear_template)->default_value(true))
+    ("fill_curveobs", po::value(&fill_curveobs)->default_value(false))
+    ("fill_asymsubsets", po::value(&fill_curveobs)->default_value(false))
+    ("fill_asymsubsets", po::value(&fill_curveobs)->default_value(false))
   ;
   /*
   po::positional_options_description pod;
@@ -983,9 +1078,9 @@ int main (int argc, const char** argv) {
   if (!(vm.count("dimu_propagator"))) {
     cout << "WARNING: must specify dimu propagator" << endl;
   } else if (dimu_propagator.compare("Z") == 0) {
-    Wsample_analysis(ndata_files, Wcharge, dimu_propagator, Zrootfile, smear_template, dimuuse_all_events);
+    Wsample_analysis(ndata_files, Wcharge, dimu_propagator, Zrootfile, smear_template, fill_curveobs, fill_profiles, fill_asymsubsets, dimuuse_all_events);
   } else if (dimu_propagator.compare("Y") == 0) {
-    Wsample_analysis(ndata_files, Wcharge, dimu_propagator, Yrootfile, smear_template, dimuuse_all_events);
+    Wsample_analysis(ndata_files, Wcharge, dimu_propagator, Yrootfile, smear_template, fill_curveobs, fill_profiles, fill_asymsubsets, dimuuse_all_events);
   } else {
     Wsample_analysis(ndata_files, Wcharge, dimu_propagator, "", smear_template);
   }
