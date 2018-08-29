@@ -45,6 +45,11 @@ Double_t GausSmear_pTdependent (Double_t value, Double_t adjparameter) {
   return value;
 }
 
+Double_t GausSmear_pdependent (Double_t pT, Double_t adjparameter, Double_t eta) {
+  pT = pT*gRandom->Gaus(1, adjparameter*log10(pT*cosh(eta)));
+  return pT;
+}
+
 Double_t ConstFactor (Double_t value, Double_t adjparameter) {
   value = value*(adjparameter);
   return value;
@@ -57,6 +62,11 @@ Double_t CurveOffset (Double_t pT, Double_t adjparameter, Double_t echarge) { //
 
 Double_t CurveOffset (Double_t pT, Double_t adjparameter, Double_t echarge, Double_t eta) {
   pT = (echarge/(echarge/(pT*cosh(eta)) + adjparameter))/cosh(eta);
+  return pT;
+}
+
+Double_t ResolutionSmear (Double_t pT, Double_t eta, Double_t constcoeff, Double_t logcoeff) {
+  pT = 0.5*GausSmear(pT, constcoeff) + 0.5*GausSmear_pdependent(pT, logcoeff, eta);
   return pT;
 }
 
@@ -111,7 +121,7 @@ template <typename TData>
 void tcanvas_from_vector (vector<TData> vector_to_plot, string canvas_name="", string canvas_title="", string plot_name="") {
   bool firsthist = true;
   int colourit = 1;
-
+  string plot_namepng;
   // Flag which forces return if you give only one of the strings.  The flag works off the assumption that you have to upate profile_title if you want to update plot_name, so it tests only if plot_name is still
   /*
   if ((canvas_name.compare("") != 0) && (plot_name.compare("") == 0)) {
@@ -131,7 +141,6 @@ void tcanvas_from_vector (vector<TData> vector_to_plot, string canvas_name="", s
 
   if (plot_name.compare("") == 0) {
    plot_name = "/home/egan/oxford-lhcb-wmass/plots/" + canvas_name + ".pdf";
-   string plot_namepng;
    plot_namepng = "/home/egan/oxford-lhcb-wmass/plots/" + canvas_name + ".png";
   }
    
@@ -145,6 +154,7 @@ void tcanvas_from_vector (vector<TData> vector_to_plot, string canvas_name="", s
     } else (*vectorit)->Draw("SAME");
   }
   c->Print(plot_name.c_str());
+  c->Print(plot_namepng.c_str());
   c->Close();
 }
 
@@ -394,8 +404,8 @@ void dimuon_analysis (vector< vector<Double_t>> pTparams,
     nbytes += MCDecayTree->GetEntry(eventit);
 
     if (smear_template) {
-      mup_PTsmear = GausSmear(mup_PT, 0.005);
-      mum_PTsmear = GausSmear(mum_PT, 0.005);
+      mup_PTsmear = ResolutionSmear(mup_PT, mup_ETA, 0.008, 0.0075);
+      mum_PTsmear = ResolutionSmear(mum_PT, mum_ETA, 0.008, 0.0075);
     } else {
       mup_PTsmear = mup_PT;
       mum_PTsmear = mum_PT;
@@ -433,9 +443,9 @@ void dimuon_analysis (vector< vector<Double_t>> pTparams,
       if (npTmethods > 1) {
 	toyindex=0;
 	for ( auto pTparam1 : pTparams[1] ) {  // (pTparamsit = pTparams.begin(); pTparamsit != pTparams.end(); ++pTparamsit) {
-	  mup_PTadj = GausSmear_pTdependent(mup_PT, pTparam1);
+	  mup_PTadj = GausSmear_pdependent(mup_PT, pTparam1, mup_ETA);
 	  //mup_PTadj = GausSmear_pTdependent(mup_PT, *pTparamsit);
-	  mum_PTadj = GausSmear_pTdependent(mum_PT, pTparam1);
+	  mum_PTadj = GausSmear_pdependent(mum_PT, pTparam1, mum_ETA);
 	  //mum_PTadj = GausSmear_pTdependent(mum_PT, *pTparamsit);
 
 	  mup.SetPtEtaPhiM(mup_PTadj, mup_ETA, mup_PHI, muMass);
@@ -541,14 +551,18 @@ void dimuon_analysis (vector< vector<Double_t>> pTparams,
   cout << "Histograms should all be filled: printing information" << endl;
   nominalH->Print("all");
 
-  tcanvas_from_vector(profiles[0]);
-  tcanvas_from_vector(profiles[1]);
-  tcanvas_from_vector(asym_subsets[0]);
-  tcanvas_from_vector(asym_subsets[1]);
-  tcanvas_from_vector(asym_subsets[2]);
-  tcanvas_from_vector(asym_subsets[3]);
-  tcanvas_from_vector(asym_subsets[4]);
-  tcanvas_from_vector(asym_subsets[5]);
+  if (fill_profiles) {
+    tcanvas_from_vector(profiles[0]);
+    tcanvas_from_vector(profiles[1]);
+  }
+  if (fill_asymsubsets) {
+    tcanvas_from_vector(asym_subsets[0]);
+    tcanvas_from_vector(asym_subsets[1]);
+    tcanvas_from_vector(asym_subsets[2]);
+    tcanvas_from_vector(asym_subsets[3]);
+    tcanvas_from_vector(asym_subsets[4]);
+    tcanvas_from_vector(asym_subsets[5]);
+  }
 
   ////////////////////////////////////////////////////////////////////////////////////////////
   ///////////////////////////////// PERFORMING CHI2 TEST /////////////////////////////////////
@@ -738,7 +752,10 @@ void Wsample_analysis (int ndata_files, string Wcharge,string dimu_propagator,
   string toy_name;
   char toy_title[100];
 
-  for (Double_t pTparam0 = pTparam_limits[0]; pTparam0 <= pTparam_limits[1]; pTparam0 += (pTparam_limits[1]-pTparam_limits[0])/(ntoys-1)) {
+  Double_t step0 = (pTparam_limits[1]-pTparam_limits[0])/(ntoys-1);
+  Double_t step1 = (pTparam_limits[3]-pTparam_limits[2])/(ntoys-1);
+
+  for (Double_t pTparam0 = pTparam_limits[0]; pTparam0 <= (pTparam_limits[1] + 0.5*step0); pTparam0 += step0) {
     pTparams[0].push_back(pTparam0);
     //value << fixed << setprecision(3) << pTparam;
     toy_name =  pTmethods[0]  + Wcharge + to_string(toyindex);
@@ -751,7 +768,7 @@ void Wsample_analysis (int ndata_files, string Wcharge,string dimu_propagator,
 
   if (npTmethods > 1) {
     toyindex = 0;
-    for (Double_t pTparam1 = pTparam_limits[2]; pTparam1 <= pTparam_limits[3]; pTparam1 += (pTparam_limits[3]-pTparam_limits[2])/(ntoys-1)) {
+    for (Double_t pTparam1 = pTparam_limits[2]; pTparam1 <= (pTparam_limits[3] + 0.5*step1); pTparam1 += step1) {
       pTparams[1].push_back(pTparam1); 
 
       //value << fixed << setprecision(5) << pTparam;
@@ -822,7 +839,7 @@ void Wsample_analysis (int ndata_files, string Wcharge,string dimu_propagator,
   
 //Declaration of leaves types
   Float_t prop_M, mu_PT, mu_ETA;
-  Float_t mu_PTadj, mu_PTsmear, muPT_smeartest;
+  Float_t mu_PTadj, mu_PTsmear, mu_PTsmeartest;
   MCDecayTree->SetBranchAddress("mu_PT", &mu_PT);
   MCDecayTree->SetBranchAddress("mu_ETA", &mu_ETA);
   MCDecayTree->SetBranchAddress("prop_M", &prop_M);
@@ -840,7 +857,7 @@ void Wsample_analysis (int ndata_files, string Wcharge,string dimu_propagator,
   TProfile *dppProfile = new TProfile("dppProfile", "Profile of dp/p versus p", 50, 0, 500);
 
 
-  /////////////// INITIALIZE HISTOGRAMS FOR VERIFYING EQUIVALENCE OF 
+  /////////////// INITIALIZE HISTOGRAMS FOR VERIFYING EQUIVALENCE OF ADDING WEIGHTED SMEAR COEFFICIENTS AND DRAWING FROM GAUSSIAN WITH PROPAGATED UNCERTAINTY VARIANCE ////////////////
   vector<TH1F *> smeartests(2);
   //TH1F *smeartest1 = new TH1F("smeartest1", "pT of muon smeared by propagated uncertainty", 40, 30, 50);
   //TH1F *smeartest2 = new TH1F("smeartest2", "pT of muon smeared by propagated uncertainty", 40, 30, 50);
@@ -849,13 +866,15 @@ void Wsample_analysis (int ndata_files, string Wcharge,string dimu_propagator,
 
 
   ////////// INITIALIZE HISTOGRAMS FOR VERIFYING DISTRIBUTION OF COMBINED SMEAR COEFFICIENT  ///////////////////////////
-  vector<TH1F *> smears(3);
+  /*
+  vector<TH1F *> smears(4);
   smears[0] = new TH1F("gssmear", "Histogram of standard Gaussian smear factor", 30, 1, 0);
   smears[1] = new TH1F("gsptsmear", "Histogram of pT dependent Gaussian smear factor", 30, 1, 0);
   smears[2] = new TH1F("combinedsmear", "Histogram of 50/50 weight combined smear", 30, 1, 0);
-  Double_t gssmear, gsptsmear, combsmear;
-  //propM->GetXaxis()->SetTitle("Mass of W propagator");
-  //propM->GetYaxis()->SetTitle("Counts");
+  smears[3] = new TH1F("propsmear", "Histogram of uncertainty propagated smear", 30, 1, 0);
+  */
+  //Double_t gssmear, gsptsmear, combsmear, propsmear;
+  Double_t propsmear;
 
   Double_t xs;
   if(Wcharge.compare("Wm") == 0) {   
@@ -869,18 +888,20 @@ void Wsample_analysis (int ndata_files, string Wcharge,string dimu_propagator,
     nbytes += MCDecayTree->GetEntry(eventit);
 
     if (smear_template) {
-      gssmear = gRandom->Gaus(1,0.008);
-      gsptsmear = gRandom->Gaus(1, log10(mu_PT*cosh(mu_ETA))*0.0075);
-      combsmear = 0.5*gssmear + 0.5*gsptsmear;
-      mu_PTsmear = mu_PT*(combsmear);//GausSmear(mu_PT, 0.005);
+      mu_PTsmear = ResolutionSmear(mu_PT, mu_ETA, 0.008, 0.0075);//GausSmear(mu_PT, 0.005);
+      propsmear = gRandom->Gaus(1, 0.5*sqrt(pow(0.008, 2) + pow(0.0075*log10(mu_PT*mu_ETA), 2)));
+      //mu_PTsmeartest = mu_PT*gRandom->Gaus(1, 0.5*sqrt(pow(0.008, 2) + pow(0.0075*log10(mu_PT*mu_ETA), 2)));
 
       smeartests[0]->Fill(mu_PTsmear);
-      smeartests[1]->Fill(mu_PT*gRandom->Gaus(1, 0.5*sqrt(pow(0.008, 2) + pow(0.0075*log10(mu_PT*mu_ETA), 2))));      
+      smeartests[1]->Fill(mu_PT*propsmear);
       
       dppProfile->Fill(mu_PT*cosh(mu_ETA), 0.5*sqrt(pow(0.008,2) + pow(0.0075*log10(mu_PT*cosh(mu_ETA)),2)));
+      /*
       smears[0]->Fill(gssmear);
       smears[1]->Fill(gsptsmear);
       smears[2]->Fill(combsmear);
+      smears[3]->Fill(propsmear);
+      */
     } else {
       mu_PTsmear = mu_PT;
     }
@@ -903,7 +924,8 @@ void Wsample_analysis (int ndata_files, string Wcharge,string dimu_propagator,
       if (npTmethods > 1) {
 	toyindex=0;
 	for ( auto pTparam1 : pTparams[1] ) {  // (pTparamsit = pTparams.begin(); pTparamsit != pTparams.end(); ++pTparamsit) {
-	  mu_PTadj = GausSmear_pTdependent(mu_PT, pTparam1);
+	  //mu_PTadj = GausSmear_pTdependent(mu_PT, pTparam1);
+	  mu_PTadj = GausSmear_pdependent(mu_PT, pTparam1, mu_ETA);
 	  toys[1][toyindex]->Fill(mu_PTadj);
 	  ++toyindex;
 	}
@@ -943,6 +965,8 @@ void Wsample_analysis (int ndata_files, string Wcharge,string dimu_propagator,
  
   string templatesHname = "~/oxford-lhcb-wmass/plots/" + Wcharge + "templatesHist.pdf";
   tcanvas_from_vector(templates, "cBW", "mu PT with different W mass hypotheses", templatesHname);
+  smeartests[0]->Scale(1/(smeartests[0]->Integral()));
+  smeartests[1]->Scale(1/(smeartests[1]->Integral()));
   tcanvas_from_vector(smeartests);
 
 

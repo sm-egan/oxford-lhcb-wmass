@@ -18,8 +18,6 @@ def simple_scatter(x, y, title='', xlabel='x', ylabel='y'):
     fig.savefig('plots/' + title + '.png')
     fig.savefig('plots/' + title + '.pdf')
 
-def 2d_chi2_pTparams ():
-
 
 def plot_root_hist (rootfileo, Hstr):
     H = rootfileo.Get(Hstr)
