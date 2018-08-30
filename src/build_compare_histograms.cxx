@@ -65,8 +65,8 @@ Double_t CurveOffset (Double_t pT, Double_t adjparameter, Double_t echarge, Doub
   return pT;
 }
 
-Double_t ResolutionSmear (Double_t pT, Double_t eta, Double_t constcoeff, Double_t logcoeff) {
-  pT = 0.5*GausSmear(pT, constcoeff) + 0.5*GausSmear_pdependent(pT, logcoeff, eta);
+Double_t ResolutionSmear (Double_t pT, Double_t constcoeff, Double_t lincoeff) {
+  pT = GausSmear_pTdependent(GausSmear(pT, constcoeff), lincoeff);
   return pT;
 }
 
@@ -169,6 +169,7 @@ void draw_colourhist2d (TH2F *hist, bool logx=false, bool logy=false, string plo
 
   TCanvas *c = new TCanvas("c", hist->GetTitle());
   gStyle->SetPalette(57);
+  gStyle->SetOptStat(0);
   hist->SetContour(20);
   
   if (logx) {
@@ -194,6 +195,7 @@ void dimuon_analysis (vector< vector<Double_t>> pTparams,
 		      bool fill_curveobs = false,
 		      bool fill_profiles = false,
 		      bool fill_asymsubsets = false,
+		      bool fill_mscbtoys = false,
 		      bool use_all_events = false) { //="/data/lhcb/users/mvesteri/GenLevelV19/merged/13TeV_Z_PowhegPythiaDefault.root") {
 
   cout << "dimuon_analysis has been called" << endl;
@@ -314,6 +316,8 @@ void dimuon_analysis (vector< vector<Double_t>> pTparams,
   vector< vector <TH1F *> > curveobs(2);
   vector<vector<TProfile *> > profiles(2);
   vector< vector <TH1F *> > asym_subsets(6);
+    // Combined momentum scale and curvature bias toys
+  vector< vector < vector <TH1F *> > > mscbtoys(6);
   
   vector<TH1F *>::iterator toyit;
   vector<Double_t>::iterator pTparamsit;
@@ -334,13 +338,15 @@ void dimuon_analysis (vector< vector<Double_t>> pTparams,
   cout << "size of pTparams: " << pTparams.size() << " size of pTparams row: " << pTparams[0].size() <<endl;
   cout << "size of curveobs: " << curveobs.size() << endl;
 
-  ////////////// LOOP TO INITIALIZE THE HISTOGRAMS /////////////////////////////////////
+  //////////////////////////////////////////////////////////////////////////////////////////////////////
+  ////////////////////////////// LOOP TO INITIALIZE THE HISTOGRAMS /////////////////////////////////////
+  //////////////////////////////////////////////////////////////////////////////////////////////////////
   for (methodindex = 0; methodindex < pTparams.size(); ++methodindex) {
     for (toyindex = 0; toyindex < pTparams[methodindex].size(); ++toyindex) {
       sprintf(hist_name, "%s%s%i", pTmethods[methodindex].c_str(), propagator.c_str(), toyindex);
       sprintf(hist_title, "%s: %f", pTmethods[methodindex].c_str(), pTparams[methodindex][toyindex]);
 
-      if ((methodindex == 2) && fill_asymsubsets) {
+      if ((methodindex == 2) && fill_asymsubsets && (!fill_mscbtoys)) {
 	asymindex = 0;
 	for (vector<vector<TH1F *>>::iterator asymit = asym_subsets.begin(); asymit != next(asym_subsets.begin(), 3); ++asymit) {
           sprintf(asymsubset_name, "%s%s_asymubset%u%u", pTmethods[methodindex].c_str(), propagator.c_str(), asymindex, toyindex);
@@ -380,7 +386,7 @@ void dimuon_analysis (vector< vector<Double_t>> pTparams,
 	  }
 	}
 
-	if (fill_asymsubsets) {
+	if (fill_asymsubsets && (!fill_mscbtoys)) {
 	  asymindex=3;
 	  for (vector<vector<TH1F *>>::iterator asymit = next(asym_subsets.begin(), 3); asymit != asym_subsets.end(); ++asymit) {
 	    sprintf(asymsubset_name, "%s%s_asymubset%u%u", pTmethods[methodindex].c_str(), propagator.c_str(), asymindex, toyindex);
@@ -389,16 +395,20 @@ void dimuon_analysis (vector< vector<Double_t>> pTparams,
 	    (*asymit).push_back(asymhist2);
 	    ++asymindex;
 	  }
-	}
-
+	} 
+	cout << "Initializing histogram " << hist_name << endl;
+	TH1F *hpT_toy = new TH1F(hist_name, hist_title, nbins, hist_lims[0][0], hist_lims[0][1]);
+	toys[methodindex].push_back(hpT_toy);
       }
-
-      cout << "Initializing histogram " << hist_name << endl;
-      TH1F *hpT_toy = new TH1F(hist_name, hist_title, nbins, hist_lims[0][0], hist_lims[0][1]);
-      toys[methodindex].push_back(hpT_toy);
     }
   }
 
+  else if (fill_asymsubsets && fill_mscbtoys) {	  
+    for (vector< vector < vector <TH1F *> > >::iterator mscbit = mscbtoys.begin(); mscbit != mscbtoys.end(); ++mscbit) {
+	    
+
+    }
+  }
   cout << "exiting histogram initialization loop." << endl;
   
   ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -438,8 +448,8 @@ void dimuon_analysis (vector< vector<Double_t>> pTparams,
     nbytes += MCDecayTree->GetEntry(eventit);
 
     if (smear_template) {
-      mup_PTsmear = ResolutionSmear(mup_PT, mup_ETA, 0.008, 0.0075);
-      mum_PTsmear = ResolutionSmear(mum_PT, mum_ETA, 0.008, 0.0075);
+      mup_PTsmear = ResolutionSmear(mup_PT, 0.002, 0.00005);
+      mum_PTsmear = ResolutionSmear(mum_PT, 0.002, 0.00005);
     } else {
       mup_PTsmear = mup_PT;
       mum_PTsmear = mum_PT;
@@ -464,9 +474,9 @@ void dimuon_analysis (vector< vector<Double_t>> pTparams,
       toyindex=0;
       
       for ( auto pTparam0 : pTparams[0] ) {  // (pTparamsit = pTparams.begin(); pTparamsit != pTparams.end(); ++pTparamsit) {
-	mup_PTadj = GausSmear(mup_PT, pTparam0);
+	mup_PTadj = GausSmear(GausSmear_pTdependent(mup_PT, 0.00005), pTparam0);
 	//mup_PTadj = GausSmear(mup_PT, *pTparamsit);
-	mum_PTadj = GausSmear(mum_PT, pTparam0);
+	mum_PTadj = GausSmear(GausSmear_pTdependent(mum_PT, 0.00005), pTparam0);
 	//mum_PTadj = GausSmear(mum_PT, *pTparamsit);
 
 	mup.SetPtEtaPhiM(mup_PTadj, mup_ETA, mup_PHI, muMass);
@@ -482,9 +492,9 @@ void dimuon_analysis (vector< vector<Double_t>> pTparams,
       if (npTmethods > 1) {
 	toyindex=0;
 	for ( auto pTparam1 : pTparams[1] ) {  // (pTparamsit = pTparams.begin(); pTparamsit != pTparams.end(); ++pTparamsit) {
-	  mup_PTadj = GausSmear_pdependent(mup_PT, pTparam1, mup_ETA);
+	  mup_PTadj = GausSmear_pTdependent(GausSmear(mup_PT, 0.002), pTparam1);
 	  //mup_PTadj = GausSmear_pTdependent(mup_PT, *pTparamsit);
-	  mum_PTadj = GausSmear_pdependent(mum_PT, pTparam1, mum_ETA);
+	  mum_PTadj = GausSmear_pTdependent(GausSmear(mum_PT, 0.002), pTparam1);
 	  //mum_PTadj = GausSmear_pTdependent(mum_PT, *pTparamsit);
 
 	  mup.SetPtEtaPhiM(mup_PTadj, mup_ETA, mup_PHI, muMass);
@@ -728,6 +738,7 @@ void Wsample_analysis (int ndata_files, string Wcharge,string dimu_propagator,
 		       bool fill_curveobs = false,
 		       bool fill_profiles = false,
 		       bool fill_asymsubsets = false,
+		       bool fill_mscbtoys = false,
 		       bool dimuuse_all_events = false) {
 
   int hist_dims[3] = {40,30,50};
@@ -739,7 +750,7 @@ void Wsample_analysis (int ndata_files, string Wcharge,string dimu_propagator,
 
   int ntemplates = 11;
   int ntoys = 6;
-  double pTparam_limits[8] = {0.004, 0.012, 0.005, 0.01, 0.999, 1.001, -1e-25, 1e-25};
+  double pTparam_limits[8] = {0.0, 0.008, 0.0, 0.001, 0.999, 1.001, -1e-25, 1e-25};
 
   Double_t MWnom = 80.4;  
   Double_t gamma = 2.15553;
@@ -900,7 +911,7 @@ void Wsample_analysis (int ndata_files, string Wcharge,string dimu_propagator,
 
   ////////////////// Initialize histograms of the total momentum and a Profile of resolution  versus momentum /////////
   TH1F *momentumH = new TH1F("momentumH", "Total momentum of muon from W decay", 50, 50, 500);
-  TProfile *dppProfile = new TProfile("dppProfile", "Profile of dp/p versus p", 50, 0, 500);
+  //TProfile *dppProfile = new TProfile("dppProfile", "Profile of dp/p versus p", 50, 0, 500);
 
   /////////// Initialize any 2D histograms /////////////////
   string kinematics2d_name = Wcharge + "kin2d_logpT_eta";
@@ -913,19 +924,8 @@ void Wsample_analysis (int ndata_files, string Wcharge,string dimu_propagator,
   vector<TH1F *> smeartests(2);
   //TH1F *smeartest1 = new TH1F("smeartest1", "pT of muon smeared by propagated uncertainty", 40, 30, 50);
   //TH1F *smeartest2 = new TH1F("smeartest2", "pT of muon smeared by propagated uncertainty", 40, 30, 50);
-  smeartests[0] = new TH1F("smeartest1", "pT of muon smeared by propagated uncertainty", 40, 30, 50);
-  smeartests[1] = new TH1F("smeartest2", "pT of muon smeared by propagated uncertainty", 40, 30, 50);
-
-  ////////// INITIALIZE HISTOGRAMS FOR VERIFYING DISTRIBUTION OF COMBINED SMEAR COEFFICIENT  ///////////////////////////
-  /*
-  vector<TH1F *> smears(4);
-  smears[0] = new TH1F("gssmear", "Histogram of standard Gaussian smear factor", 30, 1, 0);
-  smears[1] = new TH1F("gsptsmear", "Histogram of pT dependent Gaussian smear factor", 30, 1, 0);
-  smears[2] = new TH1F("combinedsmear", "Histogram of 50/50 weight combined smear", 30, 1, 0);
-  smears[3] = new TH1F("propsmear", "Histogram of uncertainty propagated smear", 30, 1, 0);
-  */
-  //Double_t gssmear, gsptsmear, combsmear, propsmear;
-  Double_t propsmear;
+  smeartests[0] = new TH1F("smeartest1", "Constant smear then pT dependent smear", 40, 30, 50);
+  smeartests[1] = new TH1F("smeartest2", "pT dependent smear then constant smear", 40, 30, 50);
 
   Double_t xs;
   if(Wcharge.compare("Wm") == 0) {   
@@ -939,14 +939,13 @@ void Wsample_analysis (int ndata_files, string Wcharge,string dimu_propagator,
     nbytes += MCDecayTree->GetEntry(eventit);
 
     if (smear_template) {
-      mu_PTsmear = ResolutionSmear(mu_PT, mu_ETA, 0.008, 0.0075);//GausSmear(mu_PT, 0.005);
-      propsmear = gRandom->Gaus(1, 0.5*sqrt(pow(0.008, 2) + pow(0.0075*log10(mu_PT*mu_ETA), 2)));
+      mu_PTsmear = ResolutionSmear(mu_PT, 0.004, 0.0005);//GausSmear(mu_PT, 0.005);
       //mu_PTsmeartest = mu_PT*gRandom->Gaus(1, 0.5*sqrt(pow(0.008, 2) + pow(0.0075*log10(mu_PT*mu_ETA), 2)));
 
       smeartests[0]->Fill(mu_PTsmear);
-      smeartests[1]->Fill(mu_PT*propsmear);
+      smeartests[1]->Fill(GausSmear(GausSmear_pTdependent(mu_PT, 0.0005), 0.004));
       
-      dppProfile->Fill(mu_PT*cosh(mu_ETA), 0.5*sqrt(pow(0.008,2) + pow(0.0075*log10(mu_PT*cosh(mu_ETA)),2)));
+      //dppProfile->Fill(mu_PT*cosh(mu_ETA), 0.5*sqrt(pow(0.008,2) + pow(0.0075*log10(mu_PT*cosh(mu_ETA)),2)));
       /*
       smears[0]->Fill(gssmear);
       smears[1]->Fill(gsptsmear);
@@ -968,7 +967,8 @@ void Wsample_analysis (int ndata_files, string Wcharge,string dimu_propagator,
       
       toyindex=0;
       for ( auto pTparam0 : pTparams[0] ) {  // (pTparamsit = pTparams.begin(); pTparamsit != pTparams.end(); ++pTparamsit) {
-	mu_PTadj = GausSmear(mu_PT, pTparam0);
+	mu_PTadj = GausSmear(GausSmear_pTdependent(mu_PT, 0.0005), pTparam0);
+	//mu_PTadj = GausSmear(mu_PT, pTparam0);
 	toys[0][toyindex]->Fill(mu_PTadj);
 	++toyindex;
       }
@@ -977,7 +977,7 @@ void Wsample_analysis (int ndata_files, string Wcharge,string dimu_propagator,
 	toyindex=0;
 	for ( auto pTparam1 : pTparams[1] ) {  // (pTparamsit = pTparams.begin(); pTparamsit != pTparams.end(); ++pTparamsit) {
 	  //mu_PTadj = GausSmear_pTdependent(mu_PT, pTparam1);
-	  mu_PTadj = GausSmear_pdependent(mu_PT, pTparam1, mu_ETA);
+	  mu_PTadj = GausSmear_pTdependent(GausSmear(mu_PT, 0.004), pTparam1);	  
 	  toys[1][toyindex]->Fill(mu_PTadj);
 	  ++toyindex;
 	}
@@ -1124,14 +1124,14 @@ void Wsample_analysis (int ndata_files, string Wcharge,string dimu_propagator,
   output->Close();
 
   if ((dimu_propagator.compare("Y") == 0) || (dimu_propagator.compare("Z") == 0)) {
-    dimuon_analysis(pTparams, dimu_propagator, dimurootfile, smear_template, fill_curveobs, fill_profiles, fill_asymsubsets, dimuuse_all_events);
+    dimuon_analysis(pTparams, dimu_propagator, dimurootfile, smear_template, fill_curveobs, fill_profiles, fill_asymsubsets, fill_mscbtoys, dimuuse_all_events);
   }
 }
 
 int main (int argc, const char** argv) {
   int ndata_files;
   string Wcharge, Zrootfile, Yrootfile, dimu_propagator;
-  bool dimuuse_all_events, smear_template, fill_curveobs, fill_profiles, fill_asymsubsets;
+  bool dimuuse_all_events, smear_template, fill_curveobs, fill_profiles, fill_asymsubsets, fill_mscbtoys;
 
   po::options_description desc("Allowed options");
   
@@ -1148,8 +1148,8 @@ int main (int argc, const char** argv) {
     ("dimuuse_all_events", po::value(&dimuuse_all_events)->default_value(false))
     ("smear_template", po::value(&smear_template)->default_value(true))
     ("fill_curveobs", po::value(&fill_curveobs)->default_value(false))
-    ("fill_asymsubsets", po::value(&fill_curveobs)->default_value(false))
-    ("fill_asymsubsets", po::value(&fill_curveobs)->default_value(false))
+    ("fill_asymsubsets", po::value(&fill_asymsubsets)->default_value(false))
+    ("fill_mscbtoys", po::value(&fill_mscbtoys)->default_value(false))
   ;
   /*
   po::positional_options_description pod;
@@ -1164,9 +1164,9 @@ int main (int argc, const char** argv) {
   if (!(vm.count("dimu_propagator"))) {
     cout << "WARNING: must specify dimu propagator" << endl;
   } else if (dimu_propagator.compare("Z") == 0) {
-    Wsample_analysis(ndata_files, Wcharge, dimu_propagator, Zrootfile, smear_template, fill_curveobs, fill_profiles, fill_asymsubsets, dimuuse_all_events);
+    Wsample_analysis(ndata_files, Wcharge, dimu_propagator, Zrootfile, smear_template, fill_curveobs, fill_profiles, fill_asymsubsets, fill_mscbtoys, dimuuse_all_events);
   } else if (dimu_propagator.compare("Y") == 0) {
-    Wsample_analysis(ndata_files, Wcharge, dimu_propagator, Yrootfile, smear_template, fill_curveobs, fill_profiles, fill_asymsubsets, dimuuse_all_events);
+    Wsample_analysis(ndata_files, Wcharge, dimu_propagator, Yrootfile, smear_template, fill_curveobs, fill_profiles, fill_asymsubsets, fill_mscbtoys, dimuuse_all_events);
   } else {
     Wsample_analysis(ndata_files, Wcharge, dimu_propagator, "", smear_template);
   }
