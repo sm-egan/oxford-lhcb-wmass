@@ -131,12 +131,13 @@ void tcanvas_from_vector (vector<TData> vector_to_plot, string canvas_name="", s
   */
  
   if (canvas_name.compare("") == 0) {
-    string c_name ((*vector_to_plot.begin())->GetName());
+    string c_name((*vector_to_plot.begin())->GetName());
     canvas_name = c_name.substr(0, c_name.length() -1) + "_combined";
   }
   
   if (canvas_title.compare("") == 0) {
-    string c_title ((*vector_to_plot.begin())->GetTitle());
+    string c_title((*vector_to_plot.begin())->GetTitle());
+    canvas_title = c_title;
   } 
 
   if (plot_name.compare("") == 0) {
@@ -157,6 +158,33 @@ void tcanvas_from_vector (vector<TData> vector_to_plot, string canvas_name="", s
   c->Print(plot_namepng.c_str());
   c->Close();
 }
+
+void draw_colourhist2d (TH2F *hist, bool logx=false, bool logy=false, string plot_path = "/home/egan/oxford-lhcb-wmass/plots/kinematics/") {
+  string plot_name(hist->GetName());   
+  // The order of the following two lines is important - otherwise you will wrap the png filename around the pdf filename
+  string plot_namepng = plot_path + plot_name + ".png";
+  plot_name = plot_path + plot_name + ".pdf";
+  //Double_t w = 500;
+  //Double_t h = 500;
+
+  TCanvas *c = new TCanvas("c", hist->GetTitle());
+  gStyle->SetPalette(57);
+  hist->SetContour(20);
+  
+  if (logx) {
+    c->SetLogx();
+  }
+  if (logy) {
+    c->SetLogy();
+  }
+
+  hist->Draw("colz");
+  //c->SetWindowSize(1.1*c->GetWw(), c->GetWh());
+  c->Print(plot_name.c_str());
+  c->Print(plot_namepng.c_str());
+  c->Close();
+}
+
 
 void dimuon_analysis (vector< vector<Double_t>> pTparams, 
 		      //string output_name, //= "./rootfiles/Zsampletest_lhcbcuts.root", 
@@ -203,8 +231,8 @@ void dimuon_analysis (vector< vector<Double_t>> pTparams,
     //hist_dims = set_hist_dims(hist_dims, 9,11,25);
     nbins = 100;
     // set hist_lims[0] >= hist_lims[1] to get automatic determination of the limits
-    hist_lims[0][0] = 9.3;
-    hist_lims[0][1] = 9.6; 
+    hist_lims[0][0] = 9.2;
+    hist_lims[0][1] = 9.7; 
 
     hist_lims[1][0] = -1;
     hist_lims[1][1] = 1;
@@ -395,6 +423,12 @@ void dimuon_analysis (vector< vector<Double_t>> pTparams,
   MCDecayTree->SetBranchStatus("mup_PHI", 1);
   MCDecayTree->SetBranchStatus("mum_PHI", 1);
 
+  //////// Initialize 2D kinematic histogram /////////////
+  string kinematics2d_name = propagator + "kin2d_logpT_eta";
+  TH2F *kinematics2d = new TH2F(kinematics2d_name.c_str(), "Histogram of dimuon system pT and rapidity", 10, 1, 0, 10, 1, 0);
+  kinematics2d->GetXaxis()->SetTitle("pT (GeV/c)");
+  kinematics2d->GetYaxis()->SetTitle("eta");
+
   TLorentzVector mup, mum, musum;
   int nentries = MCDecayTree->GetEntries();
   int nbytes = 0;
@@ -419,6 +453,11 @@ void dimuon_analysis (vector< vector<Double_t>> pTparams,
 	continue;
       }
     } else continue;
+
+    mup.SetPtEtaPhiM(mup_PT, mup_ETA, mup_PHI, muMass);
+    mum.SetPtEtaPhiM(mum_PT, mum_ETA, mum_PHI, muMass);
+    musum = mup + mum;
+    kinematics2d->Fill(musum.Pt(), musum.Rapidity());
 
     if ((eventit%2 == 0) || use_all_events) {
       
@@ -550,6 +589,7 @@ void dimuon_analysis (vector< vector<Double_t>> pTparams,
   }
   cout << "Histograms should all be filled: printing information" << endl;
   nominalH->Print("all");
+  draw_colourhist2d(kinematics2d, true);
 
   if (fill_profiles) {
     tcanvas_from_vector(profiles[0]);
@@ -562,7 +602,7 @@ void dimuon_analysis (vector< vector<Double_t>> pTparams,
     tcanvas_from_vector(asym_subsets[3]);
     tcanvas_from_vector(asym_subsets[4]);
     tcanvas_from_vector(asym_subsets[5]);
-  }
+  } 
 
   ////////////////////////////////////////////////////////////////////////////////////////////
   ///////////////////////////////// PERFORMING CHI2 TEST /////////////////////////////////////
@@ -636,20 +676,21 @@ void dimuon_analysis (vector< vector<Double_t>> pTparams,
     chi2_ofs << endl;
   }
 
-  
-  for (coindex = 0; coindex < 2; ++coindex) {
-    toyindex=0;
-    for (toyit = next(curveobs[coindex].begin()); toyit != curveobs[coindex].end(); ++toyit) {
-      chi2point = (*toyit)->Chi2Test((*curveobs[coindex].begin()), "Chi2 WW");
+  if (fill_curveobs){
+    for (coindex = 0; coindex < 2; ++coindex) {
+      toyindex=0;
+      for (toyit = next(curveobs[coindex].begin()); toyit != curveobs[coindex].end(); ++toyit) {
+	chi2point = (*toyit)->Chi2Test((*curveobs[coindex].begin()), "Chi2 WW");
 
-      if (toyindex == 0) {
-	chi2_ofs << chi2point;
-      } else {
-	chi2_ofs << ',' << chi2point;
+	if (toyindex == 0) {
+	  chi2_ofs << chi2point;
+	} else {
+	  chi2_ofs << ',' << chi2point;
+	}
+	++toyindex;
       }
-      ++toyindex;
+      chi2_ofs << endl;
     }
-    chi2_ofs << endl;
   }
 
   chi2_ofs.close();
@@ -698,7 +739,7 @@ void Wsample_analysis (int ndata_files, string Wcharge,string dimu_propagator,
 
   int ntemplates = 11;
   int ntoys = 6;
-  double pTparam_limits[8] = {0.004, 0.012, 0.005, 0.01, 0.9985, 1.0015, 0.0, 6e-25};
+  double pTparam_limits[8] = {0.004, 0.012, 0.005, 0.01, 0.999, 1.001, -1e-25, 1e-25};
 
   Double_t MWnom = 80.4;  
   Double_t gamma = 2.15553;
@@ -752,8 +793,11 @@ void Wsample_analysis (int ndata_files, string Wcharge,string dimu_propagator,
   string toy_name;
   char toy_title[100];
 
-  Double_t step0 = (pTparam_limits[1]-pTparam_limits[0])/(ntoys-1);
-  Double_t step1 = (pTparam_limits[3]-pTparam_limits[2])/(ntoys-1);
+  Double_t step0, step1, step2, step3;
+  step0 = (pTparam_limits[1]-pTparam_limits[0])/(ntoys-1);
+  step1 = (pTparam_limits[3]-pTparam_limits[2])/(ntoys-1);
+  step2 = (pTparam_limits[5]-pTparam_limits[4])/(ntoys-1);
+  step3 = (pTparam_limits[7]-pTparam_limits[6])/(ntoys-1);
 
   for (Double_t pTparam0 = pTparam_limits[0]; pTparam0 <= (pTparam_limits[1] + 0.5*step0); pTparam0 += step0) {
     pTparams[0].push_back(pTparam0);
@@ -783,7 +827,7 @@ void Wsample_analysis (int ndata_files, string Wcharge,string dimu_propagator,
 
   if (npTmethods > 2) {
     toyindex = 0;
-    for (Double_t pTparam2 = pTparam_limits[4]; pTparam2 <= pTparam_limits[5]; pTparam2 += (pTparam_limits[5]-pTparam_limits[4])/(ntoys-1)) {
+    for (Double_t pTparam2 = pTparam_limits[4]; pTparam2 <= (pTparam_limits[5] + 0.5*step2); pTparam2 += step2) {
       pTparams[2].push_back(pTparam2);
             //value << fixed << setprecision(4) << pTparam;
       toy_name = pTmethods[2] + Wcharge + to_string(toyindex);
@@ -797,7 +841,7 @@ void Wsample_analysis (int ndata_files, string Wcharge,string dimu_propagator,
 
   if (npTmethods > 3) {
     toyindex=0;
-    for (Double_t pTparam3 = pTparam_limits[6]; pTparam3 <= pTparam_limits[7]; pTparam3 += (pTparam_limits[7]-pTparam_limits[6])/(ntoys-1)) {
+    for (Double_t pTparam3 = pTparam_limits[6]; pTparam3 <= (pTparam_limits[7] + 0.5*step3); pTparam3 += step3) {
       pTparams[3].push_back(pTparam3);
 
       toy_name = pTmethods[3] + Wcharge + to_string(toyindex);
@@ -853,9 +897,17 @@ void Wsample_analysis (int ndata_files, string Wcharge,string dimu_propagator,
   cout << "nentries: " << nentries << endl;
   Long64_t nbytes = 0;
 
+
+  ////////////////// Initialize histograms of the total momentum and a Profile of resolution  versus momentum /////////
   TH1F *momentumH = new TH1F("momentumH", "Total momentum of muon from W decay", 50, 50, 500);
   TProfile *dppProfile = new TProfile("dppProfile", "Profile of dp/p versus p", 50, 0, 500);
 
+  /////////// Initialize any 2D histograms /////////////////
+  string kinematics2d_name = Wcharge + "kin2d_logpT_eta";
+  // Note that specific limits need to be specified for both axes for it to work (i.e. you cannot do automatic axis range for one and not for the other)
+  TH2F *kinematics2d = new TH2F(kinematics2d_name.c_str(), "Histogram of pT and eta of muon from W decay", 15, 30, 50, 10, 2.0, 4.5);
+  kinematics2d->GetXaxis()->SetTitle("pT (GeV/c)");
+  kinematics2d->GetYaxis()->SetTitle("eta");
 
   /////////////// INITIALIZE HISTOGRAMS FOR VERIFYING EQUIVALENCE OF ADDING WEIGHTED SMEAR COEFFICIENTS AND DRAWING FROM GAUSSIAN WITH PROPAGATED UNCERTAINTY VARIANCE ////////////////
   vector<TH1F *> smeartests(2);
@@ -863,7 +915,6 @@ void Wsample_analysis (int ndata_files, string Wcharge,string dimu_propagator,
   //TH1F *smeartest2 = new TH1F("smeartest2", "pT of muon smeared by propagated uncertainty", 40, 30, 50);
   smeartests[0] = new TH1F("smeartest1", "pT of muon smeared by propagated uncertainty", 40, 30, 50);
   smeartests[1] = new TH1F("smeartest2", "pT of muon smeared by propagated uncertainty", 40, 30, 50);
-
 
   ////////// INITIALIZE HISTOGRAMS FOR VERIFYING DISTRIBUTION OF COMBINED SMEAR COEFFICIENT  ///////////////////////////
   /*
@@ -910,6 +961,7 @@ void Wsample_analysis (int ndata_files, string Wcharge,string dimu_propagator,
       continue;
     }
     momentumH->Fill(mu_PT*cosh(mu_ETA));
+    kinematics2d->Fill(mu_PT, mu_ETA);
     //propM->Fill(prop_M);
 
     if ((eventit%2 == 0) || use_all_events) {
@@ -960,7 +1012,7 @@ void Wsample_analysis (int ndata_files, string Wcharge,string dimu_propagator,
 	templates[templateindex]->Fill(mu_PTsmear, TMath::BreitWigner(prop_M, Wmass, gamma)/denominator);
 	++templateindex;
       }
-    }
+   }
   }
  
   string templatesHname = "~/oxford-lhcb-wmass/plots/" + Wcharge + "templatesHist.pdf";
@@ -969,6 +1021,16 @@ void Wsample_analysis (int ndata_files, string Wcharge,string dimu_propagator,
   smeartests[1]->Scale(1/(smeartests[1]->Integral()));
   tcanvas_from_vector(smeartests);
 
+  draw_colourhist2d(kinematics2d, true);
+  /*
+  TCanvas *kin2dc = new TCanvas("kin2dc", kinematics2d->GetTitle());
+  gStyle->SetPalette(57);
+  kinematics2d->SetContour(20);
+  kinematics2d->Draw("colz");
+  kin2dc->Print("/home/egan/oxford-lhcb-wmass/Wkinematics2d.pdf");
+  kin2dc->Print("/home/egan/oxford-lhcb-wmass/Wkinematics2d.png");
+  kin2dc->Close();
+  */
 
   /////////////////////////////// PERFORMING A CHI SQUARE TEST //////////////////////////////////////////
 
@@ -999,7 +1061,7 @@ void Wsample_analysis (int ndata_files, string Wcharge,string dimu_propagator,
        (*templateit)->Scale((*toyit)->Integral()/(*templateit)->Integral());
        //template_count = (*templateit)->Integral();
        //toy_count = (*toyit)->Integral();
-       cout << "Scaling template integral " << template_count << " and toy " << toy_count << " to expected count" << endl;
+       //cout << "Scaling template integral " << template_count << " and toy " << toy_count << " to expected count" << endl;
        
        nbins = (*templateit)->GetNbinsX();
        
