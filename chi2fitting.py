@@ -60,6 +60,8 @@ with open(parameterfile) as csvfile:
 print('Imported pT parameters')
 print(pTParams)
 
+##### Make an array for storing fit results.  First 2 dims correspond to pT methods and toys. First entry will be the pT parameter, second the W mass, third the uncertainty. fourth the minimum chi2 #######
+Wfitresults = np.zeros((4,6,3))
 
 ### LOOP OVER THE PT ADJUSTMENT METHODS AND PRODUCE A 2-SUBPLOT FIGURE SHOWING BEST FIT W MASS PREDICTION AND MINIMUM CHI SQUARE FOR EACH ###
 for toyset in range (0,npTmethods):
@@ -104,7 +106,7 @@ for toyset in range (0,npTmethods):
 
     #chi2min = quadfit.GetMinimum()
         Mw = quadfit.GetParameter(1)
-        MwSigma = quadfit.GetParameter(2)
+        MwSigma = abs(quadfit.GetParameter(2))
 
         print('The best W mass is ' + str(Mw) + '+/-' + str(MwSigma))
         
@@ -117,6 +119,10 @@ for toyset in range (0,npTmethods):
             Wmass_err.append([MwSigma])
             chi2min_fit.append([quadfit.GetParameter(0)])
             
+        ############# FILL THE W FIT RESULTS ARRAY #######################
+        Wfitresults[toyset][toyit][0] = Mw
+        Wfitresults[toyset][toyit][1] = MwSigma
+        Wfitresults[toyset][toyit][2] = quadfit.GetParameter(0)
         
     #pTParams.append(toyit*pTincrement)
 
@@ -141,6 +147,9 @@ for toyset in range (0,npTmethods):
         print('pT parameters: ' + str(len(pTParams)))
         print('chi2 test statistics: ' + str(len(chi2min_fit)))
     '''
+
+    np.save('/home/egan/oxford-lhcb-wmass/Wfitresults/' + fileinfo, Wfitresults)
+
     print('Plotting W predictions and minimum chi square for pT method ' + str(toyset))
     fig, (axW, axChi) = plt.subplots(2, sharex=True)
     axW.scatter(pTParams[toyset], Wmass_pred[toyset])
