@@ -1,8 +1,11 @@
-#from ROOT import gROOT as R
-#R.SetBatch(True) 
+import ROOT
+from ROOT import gROOT
+gROOT.SetBatch(True) 
+from ROOT import TFile, TCanvas, TF1
+
 import sys
 import numpy as np
-import ROOT as R
+#import ROOT as R
 import csv
 from decimal import *
 import matplotlib.pyplot as plt
@@ -16,7 +19,7 @@ else:
     pTfile = fileinfo 
 filename = './rootfiles/' + fileinfo + '.root'
 #pTmethods = ['GausSmear']
-pTmethods = ['GausSmear', 'GausSmear_pTdependent', 'ConstFactor', 'CurveOffset']
+pTmethods = ['GausSmear', 'GausSmear_pTdependent', 'MomentumScale', 'CurvatureBias']
 #pTmethods = ['GausSmear', 'GausSmear_pTdependent', 'ConstFactor']
 
 if filename.find("Wm") > -1:
@@ -29,7 +32,7 @@ else:
 npTmethods = len(pTmethods)
 
 
-input = R.TFile.Open(filename, "UPDATE")
+input = ROOT.TFile.Open(filename, "UPDATE")
 pTParams = [[]]
 Wmass_pred = [[]*npTmethods]
 Wmass_err = [[]*npTmethods]
@@ -39,7 +42,7 @@ nominalH_name = Wcharge + 'template6'
 print(nominalH_name)
 
 ### INITIALIZE THE FIT FUNCTION AND NAME THE PARAMETERS ACCORDINGLY ###
-quadfit = R.TF1("chi2_quadfit", "[0]+(1/([2]**2))*(x-[1])**2", 79.8, 80.8)
+quadfit = ROOT.TF1("chi2_quadfit", "[0]+(1/([2]**2))*(x-[1])**2", 79.8, 80.8)
 quadfit.SetParName(0,"MinChi2")
 quadfit.SetParName(1,"WMass")
 quadfit.SetParName(2,"WMassUncertainty")
@@ -61,7 +64,7 @@ print('Imported pT parameters')
 print(pTParams)
 
 ##### Make an array for storing fit results.  First 2 dims correspond to pT methods and toys. First entry will be the pT parameter, second the W mass, third the uncertainty. fourth the minimum chi2 #######
-Wfitresults = np.zeros((4,6,3))
+Wfitresults = np.zeros((4,11,3))
 
 ### LOOP OVER THE PT ADJUSTMENT METHODS AND PRODUCE A 2-SUBPLOT FIGURE SHOWING BEST FIT W MASS PREDICTION AND MINIMUM CHI SQUARE FOR EACH ###
 for toyset in range (0,npTmethods):
@@ -126,7 +129,7 @@ for toyset in range (0,npTmethods):
         
     #pTParams.append(toyit*pTincrement)
 
-        c = R.TCanvas()
+        c = ROOT.TCanvas()
         chi2Plot.Draw("AP")
 
     #TLegend *legend = new TLegend()

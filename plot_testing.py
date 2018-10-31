@@ -92,12 +92,6 @@ def hist_ratio_plot(rootfileo, nominalHstr, targetHstr, wHstr = 'None', xmin = "
     nomEntries = nominalH.GetEntries() - (nominalH.GetBinContent(0) + nominalH.GetBinContent(nbinsN+1)) 
     tarEntries = targetH.GetEntries() - (targetH.GetBinContent(0) + targetH.GetBinContent(nbinsT+1)) 
     
-    print(nomEntries)
-    print(tarEntries)
-    print(targetH.GetEntries())
-    print(targetH.GetBinContent(0))
-    print(targetH.GetBinContent(nbinsT+1))
-
     AdjustEntries = 0
     ratiosumT = 0
     entrycountN = 0
