@@ -78,7 +78,11 @@ def hist_ratio_plot(rootfileo, nominalHstr, targetHstr, wHstr = 'None', xmin = "
     nominalH = rootfileo.Get(nominalHstr)
     targetH = rootfileo.Get(targetHstr)
     
-    nominalH.Scale(targetH.Integral()/nominalH.Integral())
+    try:
+        nominalH.Scale(targetH.Integral()/nominalH.Integral())
+    except AttributeError:
+        print('Object given to hist_ratio_plot is not a TH1, abandoning plot')
+        return
 
     nbinsN = nominalH.GetNbinsX()
     nbinsT = targetH.GetNbinsX()
@@ -213,6 +217,8 @@ def hist_ratio_plot(rootfileo, nominalHstr, targetHstr, wHstr = 'None', xmin = "
             xlabel = '$p^{\mu^-} - p^{\mu^+}$ / $p^{\mu^-} + p^{\mu^+}$'
         elif nominalHstr.find('asym_dmuPT') > -1:
             xlabel = '$p_T^{\mu^-} - p_T^{\mu^+}$ / $p_T^{\mu^-} + p_T^{\mu^+}$'
+        else:
+            xlabel = 'Dimuon invariant mass (GeV)'
     else:
         nominal_label = 'Nominal W mass (80.40 GeV)'
         if xmin == "" or xmax == "":
@@ -276,7 +282,8 @@ def hist_ratio_plot(rootfileo, nominalHstr, targetHstr, wHstr = 'None', xmin = "
 #print(bincounts[14]) 
     
 if __name__ == "__main__":
-    
+
+    # Provide only the file name and this program will plot all of the relevant comparative histograms
     if len(sys.argv) > 1:
         filename = sys.argv[1]
     else:
@@ -295,6 +302,7 @@ if __name__ == "__main__":
 
     targetH = 'GausSmear' + prop + '0'
 
+    # Provide a particular histograms for Root to plot
     if len(sys.argv) == 3:
         H = sys.argv[2]
         plot_root_hist(input, H)

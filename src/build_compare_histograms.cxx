@@ -133,9 +133,9 @@ vector<Double_t> scale_vector (vector<Double_t> to_scale, Double_t factor) {
 }
 
 template <typename TData>
-void tcanvas_from_vector (vector<TData> vector_to_plot, string canvas_name="", string canvas_title="", string plot_name="") {
+void tcanvas_from_vector (vector<TData> vector_to_plot, int step = 1, bool add_legend = false, const vector<Double_t> legend_info = vector<Double_t>(), bool add_title = true, string canvas_name="", string canvas_title="", string plot_name="") {
   bool firsthist = true;
-  int colourit = 1;
+  int colourit = 0;
   string plot_namepng;
   // Flag which forces return if you give only one of the strings.  The flag works off the assumption that you have to upate profile_title if you want to update plot_name, so it tests only if plot_name is still
   /*
@@ -160,15 +160,71 @@ void tcanvas_from_vector (vector<TData> vector_to_plot, string canvas_name="", s
    plot_namepng = "/home/egan/oxford-lhcb-wmass/plots/" + canvas_name + ".png";
   }
    
-  TCanvas *c = new TCanvas(canvas_name.c_str(), canvas_title.c_str()); 
-  for (typename vector<TData>::iterator vectorit = vector_to_plot.begin(); vectorit != vector_to_plot.end(); ++vectorit, ++colourit) {
-    (*vectorit)->SetLineColor(colourit);
+  int vectindex = 0;
 
-    if(firsthist) {
-      (*vectorit)->Draw();
-      firsthist = false;
-    } else (*vectorit)->Draw("SAME");
+  TCanvas *c = new TCanvas(canvas_name.c_str()); 
+  if (add_title) {
+    c = new TCanvas(canvas_name.c_str(), canvas_title.c_str()); 
   }
+
+  int colours[8] = {600, 807, 1, 616, 843, 632, 434, 402};
+  //gStyle->SetPalette(7, colours);
+  /*
+kWhite  = 0,   kBlack  = 1,   kGray    = 920,  kRed    = 632,  kGreen  = 416,
+kBlue   = 600, kYellow = 400, kMagenta = 616,  kCyan   = 432,  kOrange = 800,
+kSpring = 820, kTeal   = 840, kAzure   =  860, kViolet = 880,  kPink   = 900
+  */
+
+  if (!add_legend) {
+    for (typename vector<TData>::iterator vectorit = vector_to_plot.begin(); vectorit != vector_to_plot.end(); ++vectorit) {
+      if (vectindex % step == 0) {
+	//(*vectorit)->SetLineColor();
+	
+	if(firsthist) {
+	  (*vectorit)->Draw();
+	  firsthist = false;
+	} else (*vectorit)->Draw("SAME");
+	++colourit;
+      }
+      ++vectindex;
+    }
+  } else {
+    TLegend *legend = new TLegend(0.3, 0.1, 0.7, 0.5);
+    legend->SetHeader("Curvature Bias Parameter");
+    char leglabel[100];
+
+    /*
+    for(int vindex; vindex < vector_to_plot.size(); ++vindex) {
+	if (vindex % step == 0) {
+	  vector_to_plot[vindex]->SetLineColor(colourit);
+	  legend->AddEntry(vector_to_plot[vindex], trunc_double(legend_info[vindex], 3, "scientific").c_str(), "l");
+
+	  if(firsthist) {
+	    vector_to_plot[vindex]->Draw();
+	    firsthist = false;
+	  } else vector_to_plot[vindex]->Draw("SAME");
+	  ++colourit;
+	}
+    }
+    */
+    
+    for (typename vector<TData>::iterator vectorit = vector_to_plot.begin(); 
+	 vectorit != vector_to_plot.end(); ++vectorit) {
+      if (vectindex % step == 1) {
+	(*vectorit)->SetLineColor(colours[colourit]);
+	legend->AddEntry((*vectorit), trunc_double(legend_info[vectindex], 3, "scientific").c_str(), "l");
+
+	if(firsthist) {
+	  (*vectorit)->Draw();
+	  firsthist = false;
+	} else (*vectorit)->Draw("SAME");
+	++colourit;
+      }
+      ++vectindex;
+    }
+    legend->Draw();
+  }
+
   c->Print(plot_name.c_str());
   c->Print(plot_namepng.c_str());
   c->Close();
@@ -389,14 +445,14 @@ void dimuon_analysis (vector< vector<Double_t>> pTparams,
 	if (fill_profiles) {
 	  profindex = 0;
 	  // Require odd numbers so that just 5 curves are plotted - 11 too crowded 
-	  if ((toyindex % 2) == 1) {
-	    sprintf(profile_name, "%s_%s_profile%u", propagator.c_str(), profilevars[profindex].c_str(), toyindex);
-	    TProfile *prof = new TProfile(profile_name, "Invariant mass profile for dimuon system", 30, hist_lims[1][0], hist_lims[1][1]);
-	    prof->SetStats(kFALSE);
-	    prof->GetXaxis()->SetTitle("Total momentum asymmetry");
-	    prof->GetYaxis()->SetTitle("Invariant mass (GeV)");
-	    profiles.push_back(prof);
-	  }
+	  //if ((toyindex % 2) == 1) {
+	  sprintf(profile_name, "%s_%s_profile%u", propagator.c_str(), profilevars[profindex].c_str(), toyindex);
+	  TProfile *prof = new TProfile(profile_name, "Invariant mass profile for dimuon system", 30, hist_lims[1][0], hist_lims[1][1],9.4,9.5);
+          prof->SetStats(kFALSE);
+          prof->GetXaxis()->SetTitle("Total momentum asymmetry");
+          prof->GetYaxis()->SetTitle("Mean invariant mass (GeV)");
+          profiles.push_back(prof);
+	    //}
 	  /* These lines of code should be used when profiles is a 2D vector such that both the p asymmetry and p difference are plotted
 	  for (vector< vector<TProfile *>>::iterator profit = profiles.begin(); profit != profiles.end(); ++profit) {	    
 	    sprintf(profile_name, "%s_%s_profile%u", propagator.c_str(), profilevars[profindex].c_str(), toyindex);
@@ -637,9 +693,10 @@ void dimuon_analysis (vector< vector<Double_t>> pTparams,
 	    }
 	    if (fill_profiles) {
 	      // We take the modulus in order to use only the odd numbered toys so that the graph will be less crowded
-	      if ((toyindex % 2) == 1) {
-		profiles[toyindex / 2]->Fill(pasymmetry, musum.M());
-	      }
+	      // ^ this functionality was moved into tcanvas_from_vector by introducing a step by which you skip some toys
+	      //if ((toyindex % 2) == 1) {
+		profiles[toyindex]->Fill(pasymmetry, musum.M());
+		//}
 	    }
 	    if (fill_asymsubsets && (!fill_mscbtoys)) {
 	      if (pasymmetry < (-asym_limit)) {
@@ -694,18 +751,19 @@ void dimuon_analysis (vector< vector<Double_t>> pTparams,
   draw_colourhist2d(kinematics2d);
 
   for (vector< vector<TH1F*>>::iterator toyit = toys.begin(); toyit != toys.end(); ++toyit) {
-    tcanvas_from_vector(*toyit);
+    tcanvas_from_vector(*toyit,3);
   }
   if (fill_profiles) {
-    tcanvas_from_vector(profiles);
+    tcanvas_from_vector(profiles,2,true,pTparams[3],false);
+    //tcanvas_from_vector(profiles,2);
   }
   if (fill_asymsubsets) {
-    tcanvas_from_vector(asym_subsets[0]);
-    tcanvas_from_vector(asym_subsets[1]);
-    tcanvas_from_vector(asym_subsets[2]);
-    tcanvas_from_vector(asym_subsets[3]);
-    tcanvas_from_vector(asym_subsets[4]);
-    tcanvas_from_vector(asym_subsets[5]);
+    tcanvas_from_vector(asym_subsets[0],3);
+    tcanvas_from_vector(asym_subsets[1],3);
+    tcanvas_from_vector(asym_subsets[2],3);
+    tcanvas_from_vector(asym_subsets[3],3);
+    tcanvas_from_vector(asym_subsets[4],3);
+    tcanvas_from_vector(asym_subsets[5],3);
   } 
 
   ////////////////////////////////////////////////////////////////////////////////////////////
@@ -803,9 +861,11 @@ void dimuon_analysis (vector< vector<Double_t>> pTparams,
     //Double_t stepms = (pTparams[2][-1]-pTparams[2][0])/(pTparams[2].size() -1);
     //Double_t stepcb = (pTparams[3][-1]-pTparams[3][0])/(pTparams[3].size() -1);
     //TH2F *mscb_chi2hist = new TH2F("mscb_chi2hist", "chi2 comparison with nominal template", 6, pTparams[2][0], pTparams[2][-1] + stepms, 6, pTparams[3][0], pTparams[3][-1] + stepcb);
-    Double_t xedges[12] = {0.999978, 0.999982, 0.999986, 0.999990, 0.999994, 0.999998, 1.000002, 1.000006, 1.000010, 1.000014, 1.000018, 1.000022};
+    Double_t xedges[12] = {0.999934, 0.999946, 0.999958, 0.999970, 0.999982, 0.999994, 1.000006, 1.000018, 1.000030, 1.000042, 1.000054, 1.000066};
     Double_t yedges[12] = {-1.1e-25, -0.9e-25, -0.7e-25, -0.5e-25, -0.3e-25, -0.1e-25, 0.1e-25, 0.3e-25, 0.5e-25, 0.7e-25, 0.9e-25, 1.1e-25};
-    TH2F *mscb_chi2hist = new TH2F("mscb_chi2hist", "chi2 comparison with nominal template", 11, xedges, 11, yedges);
+    char mscbhist_name[30];
+    sprintf(mscbhist_name, "mscb_chi2hist%s", propagator.c_str());
+    TH2F *mscb_chi2hist = new TH2F(mscbhist_name, "chi2 comparison with nominal template", 11, xedges, 11, yedges);
     mscb_chi2hist->GetXaxis()->SetTitle("Momentum scale");
     mscb_chi2hist->GetYaxis()->SetTitle("Curvature Bias");
 
@@ -881,7 +941,7 @@ void Wsample_analysis (int ndata_files, string Wcharge,string dimu_propagator,
 
   int ntemplates = 11;
   int ntoys = 11;
-  double pTparam_limits[8] = {0.0, 0.004, 0.0, 0.0001, 0.99996, 1.00004, -1e-25, 1e-25};
+  double pTparam_limits[8] = {0.0, 0.004, 0.0, 0.0001, 0.99994, 1.00006, -1e-25, 1e-25};
 
   Double_t MWnom = 80.4;  
   Double_t gamma = 2.15553;
@@ -1149,9 +1209,9 @@ void Wsample_analysis (int ndata_files, string Wcharge,string dimu_propagator,
   }
  
   string templatesHname = "~/oxford-lhcb-wmass/plots/" + Wcharge + "templatesHist.pdf";
-  tcanvas_from_vector(templates, "cBW", "mu PT with different W mass hypotheses", templatesHname);
+  tcanvas_from_vector(templates, 2, true, Wmasses,"cBW", "mu PT with different W mass hypotheses", templatesHname);
   for (vector< vector<TH1F*>>::iterator toyit = toys.begin(); toyit != toys.end(); ++toyit) {
-      tcanvas_from_vector(*toyit);
+    tcanvas_from_vector(*toyit,2);
   }
 	 
   if (fill_smeartests) {
@@ -1303,7 +1363,11 @@ int main (int argc, const char** argv) {
   po::variables_map vm;
   po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);
   po::notify(vm);
-  
+
+
+  if (fill_mscbtoys && fill_asymsubsets) {
+    cout << "WARNING: simultaneous filling of mscbtoys and asymsubsets is currently not supported.  Note that mscbtoys contains all the info in asymsubsets, but in a way that is more difficult to extract" << endl;
+  }
   if (!(vm.count("dimu_propagator"))) {
     cout << "WARNING: must specify dimu propagator" << endl;
   } else if (dimu_propagator.compare("Z") == 0) {

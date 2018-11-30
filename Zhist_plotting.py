@@ -9,7 +9,7 @@ from plot_testing import hist_ratio_plot, simple_scatter
     
 
 if __name__ == "__main__":
-    pTmethods = ['GausSmear', 'GausSmear_pTdependent', 'ConstFactor', 'CurveOffset']
+    pTmethods = ['GausSmear', 'GausSmear_pTdependent', 'MomentumScale', 'CurvatureBias']
     npTmethods = len(pTmethods)
 
     if len(sys.argv) > 1:
@@ -18,7 +18,7 @@ if __name__ == "__main__":
         filename = './rootfiles/Zsampletest.root'
     input = R.TFile.Open(filename, 'UPDATE')
 
-    ntoys = 6
+    ntoys = 11
 
     if len(sys.argv) > 2:
         chi2file = sys.argv[2]
